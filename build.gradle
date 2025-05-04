@@ -1,31 +1,36 @@
 buildscript {
     repositories {
-        jcenter()
-        maven { url = "https://files.minecraftforge.net/maven" }
+        mavenCentral()
+        maven { url "https://maven.minecraftforge.net" }
     }
     dependencies {
         classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
     }
 }
+
 apply plugin: 'net.minecraftforge.gradle.forge'
 
 version = "1.0.0"
-group = "com.bogdan3000.dintegrate" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
+group = "com.bogdan3000.dintegrate"
 archivesBaseName = "DonateIntegrate"
 
-sourceCompatibility = targetCompatibility = '1.8' // Need this here so eclipse task generates correctly.
-compileJava {
-    sourceCompatibility = targetCompatibility = '1.8'
-}
+sourceCompatibility = targetCompatibility = '1.8'
 
 minecraft {
     version = "1.12.2-14.23.5.2847"
     runDir = "run"
-    
     mappings = "stable_39"
 }
 
+repositories {
+    mavenCentral()
+}
+
 dependencies {
+    implementation 'org.apache.logging.log4j:log4j-core:2.8.2'
+    implementation 'org.apache.logging.log4j:log4j-api:2.8.2'
+    compile 'org.java-websocket:Java-WebSocket:1.5.3'
+    implementation 'com.google.code.gson:gson:2.8.2'
 
 }
 
@@ -35,12 +40,24 @@ processResources {
 
     from(sourceSets.main.resources.srcDirs) {
         include 'mcmod.info'
-                
-        // replace version and mcversion
-        expand 'version':project.version, 'mcversion':project.minecraft.version
+        expand 'version': project.version, 'mcversion': project.minecraft.version
     }
-        
+
     from(sourceSets.main.resources.srcDirs) {
         exclude 'mcmod.info'
+    }
+}
+
+runClient {
+    jvmArgs '-Xmx2G', '-Xms1G', '-Dhttps.protocols=TLSv1.2'
+}
+
+runServer {
+    jvmArgs '-Xmx2G', '-Xms1G', '-Dhttps.protocols=TLSv1.2'
+}
+
+jar {
+    manifest {
+        attributes 'FMLCorePluginContainsFMLMod': 'true'
     }
 }
