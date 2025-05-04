@@ -23,7 +23,7 @@ public class DPICommand extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/dpi [set_token <token>|set_userid <userId>|enable|disable|status|reload|test <username> <amount>]";
+        return "/dpi [set_token <token>|set_userid <userId>|enable|disable|status|reload|test <username> <amount> [message]]";
     }
 
     @Override
@@ -92,7 +92,7 @@ public class DPICommand extends CommandBase {
 
             case "test":
                 if (args.length < 3) {
-                    throw new CommandException("Usage: /dpi test <username> <amount>");
+                    throw new CommandException("Usage: /dpi test <username> <amount> [message]");
                 }
                 String username = args[1];
                 int amount;
@@ -101,7 +101,8 @@ public class DPICommand extends CommandBase {
                 } catch (NumberFormatException e) {
                     throw new CommandException("Amount must be a number");
                 }
-                testDonation(sender, username, amount);
+                String message = args.length > 3 ? String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length)) : "";
+                testDonation(sender, username, amount, message);
                 break;
 
             default:
@@ -118,7 +119,7 @@ public class DPICommand extends CommandBase {
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi disable " + TextFormatting.GRAY + "- Disable donation processing"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi status " + TextFormatting.GRAY + "- Show configuration status"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi reload " + TextFormatting.GRAY + "- Reload WebSocket connection"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi test <username> <amount> " + TextFormatting.GRAY + "- Test a donation"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi test <username> <amount> [message] " + TextFormatting.GRAY + "- Test a donation"));
     }
 
     private void showStatus(ICommandSender sender, ModConfig config) {
@@ -145,7 +146,7 @@ public class DPICommand extends CommandBase {
         return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
     }
 
-    private void testDonation(ICommandSender sender, String username, int amount) {
+    private void testDonation(ICommandSender sender, String username, int amount, String message) {
         ModConfig config = ConfigHandler.getConfig();
         boolean actionFound = false;
         Random random = new Random();
@@ -153,7 +154,9 @@ public class DPICommand extends CommandBase {
         for (com.bogdan3000.dintegrate.config.Action action : config.getActions()) {
             if (action.getSum() == amount) {
                 List<String> commandsToExecute = new ArrayList<>();
-                String title = action.getMessage().replace("{username}", username);
+                String title = action.getMessage()
+                        .replace("{username}", username)
+                        .replace("{message}", message);
 
                 List<String> availableCommands = action.getCommands();
                 switch (action.getExecutionMode()) {
@@ -179,12 +182,12 @@ public class DPICommand extends CommandBase {
                 }
 
                 for (String cmd : commandsToExecute) {
-                    String command = cmd.replace("{username}", username);
-                    DonateIntegrate.commands.add(command.startsWith("/") ? command : "/say " + command);
+                    String command = cmd.replace("{username}", username).replace("{message}", message);
+                    DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute(command, username));
                 }
 
                 if (!title.isEmpty()) {
-                    DonateIntegrate.commands.add("title @a title \"" + title + "\"");
+                    DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute("title @a title \"" + title + "\"", username));
                 }
 
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Test donation triggered: " +

@@ -4,7 +4,11 @@ import com.bogdan3000.dintegrate.command.DPICommand;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.donatepay.DonatePayApiClient;
 import com.bogdan3000.dintegrate.donatepay.DonatePayWebSocketHandler;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
@@ -24,17 +28,28 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "1.3.0")
+@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "1.3.1")
 public class DonateIntegrate {
     public static final String MOD_ID = "dintegrate";
     public static final String NAME = "DonateIntegrate";
     public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
-    public static List<String> commands = new ArrayList<>();
+    public static List<CommandToExecute> commands = new ArrayList<>();
     @Instance
     public static DonateIntegrate instance;
 
     private static DonatePayWebSocketHandler wsHandler;
     private static ExecutorService commandExecutor;
+
+    // Структура для хранения команд с указанием игрока
+    public static class CommandToExecute {
+        public final String command;
+        public final String playerName;
+
+        public CommandToExecute(String command, String playerName) {
+            this.command = command;
+            this.playerName = playerName;
+        }
+    }
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -96,15 +111,24 @@ public class DonateIntegrate {
             }
 
             if (tickCounter % 40 == 0 && !commands.isEmpty()) {
-                MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
-                if (server != null) {
-                    String command = commands.remove(0);
-                    commandExecutor.submit(() -> {
-                        server.getCommandManager().executeCommand(server, command);
-                        LOGGER.debug("Executed command: {}", command);
-                    });
-                }
+                CommandToExecute cmd = commands.remove(0);
+                commandExecutor.submit(() -> {
+                    Minecraft mc = Minecraft.getMinecraft();
+                    if (mc.player != null) {
+                        mc.addScheduledTask(() -> {
+                            // Команды начинаются с "/", остальное — просто сообщение
+                            if (cmd.command.startsWith("/")) {
+                                mc.player.sendChatMessage(cmd.command);
+                                LOGGER.debug("Sent command as {}: {}", cmd.playerName, cmd.command);
+                            } else {
+                                mc.player.sendChatMessage(cmd.command);
+                                LOGGER.debug("Sent message as {}: {}", cmd.playerName, cmd.command);
+                            }
+                        });
+                    }
+                });
             }
+
         }
     }
 }

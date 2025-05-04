@@ -14,27 +14,30 @@ public class ModConfig {
     public ModConfig() {
         actions.add(new Action(
                 10,
-                "{username} donated 10!",
-                Arrays.asList("give {username} diamond 1", "/say Thanks {username}!"),
+                "{username} donated 10! Message: {message}",
+                Arrays.asList(
+                        "Thanks for donation: {message}",
+                        "/give @s diamond 1"
+                ),
                 Action.ExecutionMode.SEQUENTIAL
         ));
         actions.add(new Action(
                 20,
-                "{username} donated 20!",
+                "{username} donated 20! Message: {message}",
                 Arrays.asList(
-                        "give {username} emerald 5",
-                        "effect {username} speed 30 1",
-                        "say Epic donation from {username}!"
+                        "give @s emerald 5",
+                        "effect @s speed 30 1",
+                        "say Epic donation from {username}: {message}"
                 ),
                 Action.ExecutionMode.RANDOM_ONE
         ));
         actions.add(new Action(
                 50,
-                "{username} donated 50!",
+                "{username} donated 50! Message: {message}",
                 Arrays.asList(
-                        "give {username} diamond_block 1",
-                        "effect {username} strength 60 2",
-                        "/say Legendary {username}!"
+                        "give @s diamond_block 1",
+                        "effect @s strength 60 2",
+                        "/say Legendary {username}: {message}"
                 ),
                 Action.ExecutionMode.RANDOM_MULTIPLE
         ));

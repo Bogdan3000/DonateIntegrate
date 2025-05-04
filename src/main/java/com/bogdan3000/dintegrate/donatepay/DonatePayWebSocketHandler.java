@@ -261,13 +261,13 @@ public class DonatePayWebSocketHandler {
             int id = notification.get("id").getAsInt();
             float sum = vars.get("sum").getAsFloat();
             String username = vars.get("name").getAsString();
-            String message = vars.has("comment") ? vars.get("comment").getAsString() : "";
+            String comment = vars.has("comment") ? vars.get("comment").getAsString() : "";
 
-            DonateIntegrate.LOGGER.info("Donation from {} for {} (ID: {})", username, sum, id);
-            processDonation(id, sum, username, message);
+            DonateIntegrate.LOGGER.info("Donation from {} for {} (ID: {}, comment: {})", username, sum, id, comment);
+            processDonation(id, sum, username, comment);
         }
 
-        private void processDonation(int id, float sum, String username, String message) {
+        private void processDonation(int id, float sum, String username, String comment) {
             ModConfig config = ConfigHandler.getConfig();
             if (id <= config.getLastDonate()) {
                 DonateIntegrate.LOGGER.info("Skipping processed donation #{}", id);
@@ -280,7 +280,9 @@ public class DonatePayWebSocketHandler {
                 if (Math.abs((float) action.getSum() - sum) < 0.001) {
                     actionFound = true;
                     List<String> commandsToExecute = new ArrayList<>();
-                    String title = action.getMessage().replace("{username}", username).replace("{message}", message);
+                    String title = action.getMessage()
+                            .replace("{username}", username)
+                            .replace("{message}", comment);
 
                     List<String> availableCommands = action.getCommands();
                     switch (action.getExecutionMode()) {
@@ -306,12 +308,12 @@ public class DonatePayWebSocketHandler {
                     }
 
                     for (String cmd : commandsToExecute) {
-                        String command = cmd.replace("{username}", username).replace("{message}", message);
-                        DonateIntegrate.commands.add(command.startsWith("/") ? command : "/say " + command);
+                        String command = cmd.replace("{username}", username).replace("{message}", comment);
+                        DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute(command, username));
                     }
 
                     if (!title.isEmpty()) {
-                        DonateIntegrate.commands.add("title @a title \"" + title + "\"");
+                        DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute("title @a title \"" + title + "\"", username));
                     }
 
                     config.setLastDonate(id);
