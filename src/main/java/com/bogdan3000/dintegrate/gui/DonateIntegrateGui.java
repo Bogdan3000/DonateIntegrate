@@ -1,14 +1,18 @@
 package com.bogdan3000.dintegrate.gui;
 
 import com.bogdan3000.dintegrate.DonateIntegrate;
+import com.bogdan3000.dintegrate.config.Action;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.config.ModConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.GL11;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,6 +30,8 @@ public class DonateIntegrateGui extends GuiScreen {
     private static final int CONTENT_WIDTH = 400;
     private static final int CONTENT_HEIGHT = 300;
     private static final int TAB_COUNT = 4;
+    private static final int ACTION_ITEM_HEIGHT = 30;
+    private static final int ACTION_LIST_HEIGHT = 180;
 
     private int contentLeft, contentTop;
     private int currentTab = 0;
@@ -40,17 +46,18 @@ public class DonateIntegrateGui extends GuiScreen {
     private CustomButton clearSettingsButton;
 
     // Actions Tab
-    private ActionList actionList;
     private CustomButton addActionButton;
     private CustomButton editActionButton;
     private CustomButton deleteActionButton;
+    private int selectedActionIndex = -1;
+    private float scrollOffset = 0.0f;
+    private boolean isDraggingScrollbar = false;
+    private int scrollbarHeight = 20;
+    private int scrollbarTop;
 
     // Status Tab
     private CustomButton reconnectButton;
     private CustomButton enableToggleButton;
-
-    // History Tab
-    private DonationHistoryList historyList;
 
     @Override
     public void initGui() {
@@ -58,6 +65,8 @@ public class DonateIntegrateGui extends GuiScreen {
         tabButtons.clear();
         Keyboard.enableRepeatEvents(true);
         fadeAnimation = 0.0f;
+        selectedActionIndex = -1;
+        scrollOffset = 0.0f;
 
         // Calculate content area
         contentLeft = (width - CONTENT_WIDTH) / 2;
@@ -83,10 +92,11 @@ public class DonateIntegrateGui extends GuiScreen {
         buttonList.add(clearSettingsButton);
 
         // Actions Tab
-        actionList = new ActionList(this, contentLeft + 20, contentTop + 60, CONTENT_WIDTH - 40, CONTENT_HEIGHT - 120);
         addActionButton = new CustomButton(104, contentLeft + 20, contentTop + CONTENT_HEIGHT - 60, 80, 24, "Add");
         editActionButton = new CustomButton(105, contentLeft + 110, contentTop + CONTENT_HEIGHT - 60, 80, 24, "Edit");
+        editActionButton.enabled = false; // Disabled until an action is selected
         deleteActionButton = new CustomButton(106, contentLeft + 200, contentTop + CONTENT_HEIGHT - 60, 80, 24, "Delete");
+        deleteActionButton.enabled = false; // Disabled until an action is selected
         buttonList.add(addActionButton);
         buttonList.add(editActionButton);
         buttonList.add(deleteActionButton);
@@ -97,10 +107,6 @@ public class DonateIntegrateGui extends GuiScreen {
                 ConfigHandler.getConfig().isEnabled() ? "Disable" : "Enable");
         buttonList.add(reconnectButton);
         buttonList.add(enableToggleButton);
-
-        // History Tab
-        historyList = new DonationHistoryList(this, contentLeft + 20, contentTop + 60, CONTENT_WIDTH - 40, CONTENT_HEIGHT - 80);
-        updateHistoryList();
 
         updateTabVisibility();
     }
@@ -121,21 +127,22 @@ public class DonateIntegrateGui extends GuiScreen {
         saveSettingsButton.visible = currentTab == 0;
         clearSettingsButton.visible = currentTab == 0;
 
-        actionList.setVisible(currentTab == 1);
         addActionButton.visible = currentTab == 1;
         editActionButton.visible = currentTab == 1;
         deleteActionButton.visible = currentTab == 1;
 
         reconnectButton.visible = currentTab == 2;
         enableToggleButton.visible = currentTab == 2;
-
-        historyList.setVisible(currentTab == 3);
     }
 
     @Override
     protected void actionPerformed(GuiButton button) throws IOException {
         if (button instanceof TabButton) {
             currentTab = button.id;
+            selectedActionIndex = -1;
+            editActionButton.enabled = false;
+            deleteActionButton.enabled = false;
+            scrollOffset = 0.0f;
             updateTabVisibility();
             return;
         }
@@ -163,21 +170,18 @@ public class DonateIntegrateGui extends GuiScreen {
                 mc.displayGuiScreen(new ActionEditGui(this, null));
                 break;
             case 105: // Edit Action
-                com.bogdan3000.dintegrate.config.Action selectedAction = actionList.getSelectedAction();
-                if (selectedAction == null) {
-                    mc.displayGuiScreen(new MessageGui(this, "Please select an action to edit!", false));
-                } else {
-                    mc.displayGuiScreen(new ActionEditGui(this, selectedAction));
+                if (selectedActionIndex >= 0 && selectedActionIndex < config.getActions().size()) {
+                    Action action = config.getActions().get(selectedActionIndex);
+                    mc.displayGuiScreen(new ActionEditGui(this, action));
                 }
                 break;
             case 106: // Delete Action
-                selectedAction = actionList.getSelectedAction();
-                if (selectedAction == null) {
-                    mc.displayGuiScreen(new MessageGui(this, "Please select an action to delete!", false));
-                } else {
-                    config.getActions().remove(selectedAction);
+                if (selectedActionIndex >= 0 && selectedActionIndex < config.getActions().size()) {
+                    config.getActions().remove(selectedActionIndex);
                     ConfigHandler.save();
-                    actionList.refreshList();
+                    selectedActionIndex = -1;
+                    editActionButton.enabled = false;
+                    deleteActionButton.enabled = false;
                     mc.displayGuiScreen(new MessageGui(this, "Action deleted successfully!", true));
                 }
                 break;
@@ -206,9 +210,73 @@ public class DonateIntegrateGui extends GuiScreen {
             tokenField.mouseClicked(mouseX, mouseY, mouseButton);
             userIdField.mouseClicked(mouseX, mouseY, mouseButton);
         } else if (currentTab == 1) {
-            actionList.mouseClicked(mouseX, mouseY, mouseButton);
-        } else if (currentTab == 3) {
-            historyList.mouseClicked(mouseX, mouseY, mouseButton);
+            handleActionListClick(mouseX, mouseY, mouseButton);
+            handleScrollbarClick(mouseX, mouseY, mouseButton);
+        }
+    }
+
+    private void handleActionListClick(int mouseX, int mouseY, int mouseButton) {
+        if (mouseButton != 0) return; // Only handle left clicks
+        int listTop = contentTop + 60;
+        int listBottom = listTop + ACTION_LIST_HEIGHT;
+        int listLeft = contentLeft + 20;
+        int listRight = contentLeft + CONTENT_WIDTH - 40;
+
+        if (mouseX >= listLeft && mouseX <= listRight && mouseY >= listTop && mouseY <= listBottom) {
+            List<Action> actions = ConfigHandler.getConfig().getActions();
+            int index = (int) ((mouseY - listTop + scrollOffset) / ACTION_ITEM_HEIGHT);
+            if (index >= 0 && index < actions.size()) {
+                selectedActionIndex = index;
+                editActionButton.enabled = true;
+                deleteActionButton.enabled = true;
+            } else {
+                selectedActionIndex = -1;
+                editActionButton.enabled = false;
+                deleteActionButton.enabled = false;
+            }
+        }
+    }
+
+    private void handleScrollbarClick(int mouseX, int mouseY, int mouseButton) {
+        int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
+        int scrollbarRight = scrollbarLeft + 10;
+        if (mouseX >= scrollbarLeft && mouseX <= scrollbarRight && mouseY >= scrollbarTop && mouseY <= scrollbarTop + scrollbarHeight) {
+            isDraggingScrollbar = true;
+        }
+    }
+
+    @Override
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
+        super.mouseReleased(mouseX, mouseY, state);
+        isDraggingScrollbar = false;
+    }
+
+    @Override
+    public void handleMouseInput() throws IOException {
+        super.handleMouseInput();
+        if (currentTab != 1) return;
+
+        int mouseWheel = Mouse.getEventDWheel();
+        if (mouseWheel != 0) {
+            List<Action> actions = ConfigHandler.getConfig().getActions();
+            int maxItems = ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT;
+            int maxScroll = Math.max(0, actions.size() - maxItems) * ACTION_ITEM_HEIGHT;
+            scrollOffset -= mouseWheel > 0 ? 30 : -30;
+            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+        }
+
+        if (isDraggingScrollbar) {
+            int mouseY = Mouse.getY();
+            int screenHeight = mc.displayHeight;
+            int guiHeight = height;
+            float mouseYGui = (float) (screenHeight - mouseY) * guiHeight / screenHeight;
+            List<Action> actions = ConfigHandler.getConfig().getActions();
+            int maxItems = ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT;
+            int maxScroll = Math.max(0, actions.size() - maxItems) * ACTION_ITEM_HEIGHT;
+            float scrollAreaHeight = ACTION_LIST_HEIGHT - scrollbarHeight;
+            float scrollRatio = (mouseYGui - contentTop - 60) / scrollAreaHeight;
+            scrollOffset = scrollRatio * maxScroll;
+            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
         }
     }
 
@@ -234,16 +302,13 @@ public class DonateIntegrateGui extends GuiScreen {
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        // Draw full-screen overlay with fade-in
         GlStateManager.enableBlend();
         GlStateManager.color(1.0f, 1.0f, 1.0f, fadeAnimation);
         GuiRenderUtils.drawOverlay(width, height);
 
-        // Draw content area
         GuiRenderUtils.drawRoundedRect(contentLeft, contentTop, CONTENT_WIDTH, CONTENT_HEIGHT, 8, 0xFF263238);
         fontRenderer.drawString(getTabName(currentTab), contentLeft + 20, contentTop + 20, GuiRenderUtils.getTextColor());
 
-        // Draw tab-specific content
         switch (currentTab) {
             case 0: // Settings
                 drawSettingsTab(mouseX, mouseY, partialTicks);
@@ -259,7 +324,6 @@ public class DonateIntegrateGui extends GuiScreen {
                 break;
         }
 
-        // Draw all buttons (including tabs)
         super.drawScreen(mouseX, mouseY, partialTicks);
         GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
     }
@@ -272,7 +336,47 @@ public class DonateIntegrateGui extends GuiScreen {
     }
 
     private void drawActionsTab(int mouseX, int mouseY, float partialTicks) {
-        actionList.drawScreen(mouseX, mouseY, partialTicks);
+        List<Action> actions = ConfigHandler.getConfig().getActions();
+        int listTop = contentTop + 60;
+        int listLeft = contentLeft + 20;
+        int listWidth = CONTENT_WIDTH - 40;
+        int maxItems = ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT;
+
+        // Draw list background
+        GuiRenderUtils.drawRoundedRect(listLeft, listTop, listWidth, ACTION_LIST_HEIGHT, 4, 0xFF37474F);
+
+        // Enable scissor test for clipping
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+        int scaleFactor = new ScaledResolution(mc).getScaleFactor();
+        GL11.glScissor((listLeft * scaleFactor), (height - listTop - ACTION_LIST_HEIGHT) * scaleFactor,
+                (listWidth * scaleFactor), (ACTION_LIST_HEIGHT * scaleFactor));
+
+        // Draw action items
+        for (int i = 0; i < actions.size(); i++) {
+            int y = listTop + i * ACTION_ITEM_HEIGHT - (int) scrollOffset;
+            if (y + ACTION_ITEM_HEIGHT < listTop || y > listTop + ACTION_LIST_HEIGHT) continue;
+
+            Action action = actions.get(i);
+            int color = i == selectedActionIndex ? GuiRenderUtils.mixColors(0xFF37474F, 0xFF0288D1, 0.5f) : 0xFF37474F;
+            GuiRenderUtils.drawRoundedRect(listLeft + 2, y + 2, listWidth - 4, ACTION_ITEM_HEIGHT - 4, 4, color);
+
+            String text = String.format("Sum: %.2f, Commands: %d, %s, Priority: %d",
+                    action.getSum(), action.getCommands().size(),
+                    action.isEnabled() ? "Enabled" : "Disabled", action.getPriority());
+            fontRenderer.drawString(text, listLeft + 8, y + 10, GuiRenderUtils.getTextColor());
+        }
+
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+
+        // Draw scrollbar
+        if (actions.size() > maxItems) {
+            int maxScroll = (actions.size() - maxItems) * ACTION_ITEM_HEIGHT;
+            float scrollRatio = scrollOffset / (maxScroll > 0 ? maxScroll : 1);
+            scrollbarHeight = Math.max(20, ACTION_LIST_HEIGHT * maxItems / actions.size());
+            scrollbarTop = listTop + (int) ((ACTION_LIST_HEIGHT - scrollbarHeight) * scrollRatio);
+            int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
+            GuiRenderUtils.drawRoundedRect(scrollbarLeft, scrollbarTop, 10, scrollbarHeight, 4, 0xFF546E7A);
+        }
     }
 
     private void drawStatusTab(int mouseX, int mouseY, float partialTicks) {
@@ -296,7 +400,11 @@ public class DonateIntegrateGui extends GuiScreen {
     }
 
     private void drawHistoryTab(int mouseX, int mouseY, float partialTicks) {
-        historyList.drawScreen(mouseX, mouseY, partialTicks);
+        int y = contentTop + 60;
+        for (int i = 0; i < donationHistory.size() && y < contentTop + CONTENT_HEIGHT - 40; i++) {
+            fontRenderer.drawString(donationHistory.get(i), contentLeft + 20, y, GuiRenderUtils.getTextColor());
+            y += 20;
+        }
     }
 
     @Override
@@ -304,25 +412,8 @@ public class DonateIntegrateGui extends GuiScreen {
         Keyboard.enableRepeatEvents(false);
     }
 
-    public void addDonationToHistory(String donationInfo) {
-        if (donationInfo == null) return;
-        donationHistory.add(0, donationInfo);
-        if (donationHistory.size() > 100) {
-            donationHistory.remove(donationHistory.size() - 1);
-        }
-        updateHistoryList();
-    }
-
-    private void updateHistoryList() {
-        historyList.setEntries(donationHistory);
-    }
-
     public Minecraft getMinecraft() {
         return mc;
-    }
-
-    public void refreshActionList() {
-        actionList.refreshList();
     }
 
     /**
@@ -349,7 +440,9 @@ public class DonateIntegrateGui extends GuiScreen {
 
             GlStateManager.pushMatrix();
             GuiRenderUtils.drawTabButton(x, y, width, height, hovered, id == ((DonateIntegrateGui) mc.currentScreen).currentTab, hoverAnimation);
-            drawCenteredString(mc.fontRenderer, displayString, x + width / 2, y + (height - 8) / 2, GuiRenderUtils.getTextColor());
+            drawCenteredString(mc.fontRenderer, displayString, x + width / 2, y +
+
+                    (height - 8) / 2, GuiRenderUtils.getTextColor());
             GlStateManager.popMatrix();
         }
     }

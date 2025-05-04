@@ -131,11 +131,6 @@ public class DonateIntegrate {
                             ConfigHandler.getConfig().setLastDonate(event.id());
                             ConfigHandler.save();
                             LOGGER.info("Processed donation #{}: added {} commands", event.id(), commandsToExecute.size());
-                            if (Minecraft.getMinecraft().currentScreen instanceof DonateIntegrateGui) {
-                                String donationInfo = String.format("ID: %d, User: %s, Amount: %.2f, Message: %s",
-                                        event.id(), event.username(), event.amount(), event.message());
-                                ((DonateIntegrateGui) Minecraft.getMinecraft().currentScreen).addDonationToHistory(donationInfo);
-                            }
                         });
             } catch (Exception e) {
                 LOGGER.error("Error processing donation #{}: {}", event.id(), e.getMessage());
