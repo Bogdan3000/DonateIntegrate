@@ -6,7 +6,10 @@ import com.bogdan3000.dintegrate.donation.DonationProvider;
 import com.bogdan3000.dintegrate.donation.DonatePayProvider;
 import com.bogdan3000.dintegrate.gui.DonateIntegrateGui;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.settings.KeyBinding;
+import net.minecraftforge.client.settings.KeyConflictContext;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
@@ -14,8 +17,11 @@ import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.event.FMLServerStoppingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.lwjgl.input.Keyboard;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -31,6 +37,12 @@ public class DonateIntegrate {
 
     private static final ConcurrentLinkedQueue<CommandToExecute> commands = new ConcurrentLinkedQueue<>();
     private static final long COMMAND_COOLDOWN_MS = 1; // 0.01 second between commands
+    private static final KeyBinding KEY_OPEN_GUI = new KeyBinding(
+            "key.dintegrate.open_gui",
+            KeyConflictContext.IN_GAME,
+            Keyboard.KEY_NONE,
+            "key.categories.dintegrate"
+    );
 
     private static DonationProvider donationProvider;
     private static ExecutorService commandExecutor;
@@ -60,6 +72,10 @@ public class DonateIntegrate {
         LOGGER.info("Initializing DonateIntegrate");
         instance = this;
         ConfigHandler.register(event.getSuggestedConfigurationFile());
+        if (event.getSide() == Side.CLIENT) {
+            ClientRegistry.registerKeyBinding(KEY_OPEN_GUI);
+            MinecraftForge.EVENT_BUS.register(new ClientTickHandler());
+        }
     }
 
     public static DonateIntegrate getInstance() {
@@ -76,7 +92,7 @@ public class DonateIntegrate {
         MinecraftForge.EVENT_BUS.register(new ServerTickHandler());
         commandExecutor = Executors.newFixedThreadPool(2);
         initializeDonationProvider();
-        NetworkHandler.init(); // Initialize network handler
+        NetworkHandler.init();
     }
 
     @Mod.EventHandler
@@ -128,7 +144,6 @@ public class DonateIntegrate {
                             ConfigHandler.getConfig().setLastDonate(event.id());
                             ConfigHandler.save();
                             LOGGER.info("Processed donation #{}: added {} commands", event.id(), commandsToExecute.size());
-                            // Update GUI history if open
                             if (Minecraft.getMinecraft().currentScreen instanceof DonateIntegrateGui) {
                                 String donationInfo = String.format("ID: %d, User: %s, Amount: %.2f, Message: %s",
                                         event.id(), event.username(), event.amount(), event.message());
@@ -144,7 +159,7 @@ public class DonateIntegrate {
     public static void startDonationProvider() {
         try {
             if (ConfigHandler.getConfig().isEnabled()) {
-                stopDonationProvider(); // Close old connection before starting new
+                stopDonationProvider();
                 donationProvider.connect();
                 LOGGER.info("Attempting to start donation provider");
             } else {
@@ -181,7 +196,7 @@ public class DonateIntegrate {
             if (event.phase != TickEvent.Phase.END) return;
 
             tickCounter++;
-            if (tickCounter % 6000 == 0) { // Every 5 minutes
+            if (tickCounter % 6000 == 0) {
                 try {
                     if (!ConfigHandler.getConfig().isEnabled()) {
                         LOGGER.info("Donation provider disabled");
@@ -195,7 +210,7 @@ public class DonateIntegrate {
                 }
             }
 
-            if (tickCounter % 100 == 0) { // Every 5 seconds
+            if (tickCounter % 100 == 0) {
                 try {
                     ConfigHandler.checkAndReloadConfig();
                 } catch (Exception e) {
@@ -203,7 +218,7 @@ public class DonateIntegrate {
                 }
             }
 
-            if (tickCounter % 2 == 0 && !commands.isEmpty()) { // Every 0.5 seconds
+            if (tickCounter % 2 == 0 && !commands.isEmpty()) {
                 long currentTime = System.currentTimeMillis();
                 if (currentTime - lastCommandTime < COMMAND_COOLDOWN_MS) {
                     return;
@@ -228,6 +243,17 @@ public class DonateIntegrate {
                         }
                     });
                 }
+            }
+        }
+    }
+
+    @SideOnly(Side.CLIENT)
+    public static class ClientTickHandler {
+        @SubscribeEvent
+        public void onClientTick(TickEvent.ClientTickEvent event) {
+            if (event.phase != TickEvent.Phase.END) return;
+            if (KEY_OPEN_GUI.isPressed() && Minecraft.getMinecraft().currentScreen == null) {
+                Minecraft.getMinecraft().displayGuiScreen(new DonateIntegrateGui());
             }
         }
     }

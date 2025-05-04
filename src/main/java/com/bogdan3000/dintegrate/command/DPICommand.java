@@ -1,13 +1,11 @@
 package com.bogdan3000.dintegrate.command;
 
 import com.bogdan3000.dintegrate.DonateIntegrate;
-import com.bogdan3000.dintegrate.NetworkHandler;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.config.ModConfig;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
-import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
@@ -15,6 +13,9 @@ import net.minecraft.util.text.TextFormatting;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Command handler for DonateIntegrate administrative commands.
+ */
 public class DPICommand extends CommandBase {
     @Override
     public String getName() {
@@ -23,7 +24,7 @@ public class DPICommand extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/dpi [gui|set_token <token>|set_userid <userId>|enable|disable|status|reload|reload_config|test <username> <amount> [message]]";
+        return "/dpi [set_token <token>|set_userid <userId>|enable|disable|status|reload|reload_config|test <username> <amount> [message]]";
     }
 
     @Override
@@ -38,14 +39,6 @@ public class DPICommand extends CommandBase {
 
         try {
             switch (subCommand) {
-                case "gui":
-                    if (!(sender instanceof EntityPlayerMP)) {
-                        throw new CommandException("This command must be run by a player");
-                    }
-                    EntityPlayerMP player = (EntityPlayerMP) sender;
-                    NetworkHandler.INSTANCE.sendTo(new NetworkHandler.OpenGuiMessage(), player);
-                    sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Opening DonateIntegrate GUI"));
-                    break;
                 case "set_token":
                     if (args.length < 2) throw new CommandException("Usage: /dpi set_token <token>");
                     String token = args[1];
@@ -117,7 +110,6 @@ public class DPICommand extends CommandBase {
 
     private void showHelp(ICommandSender sender) {
         sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "=== DonateIntegrate Commands ==="));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi gui " + TextFormatting.GRAY + "- Open configuration GUI"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_token <token> " + TextFormatting.GRAY + "- Set DonatePay token"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_userid <userId> " + TextFormatting.GRAY + "- Set User ID"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi enable " + TextFormatting.GRAY + "- Enable donation processing"));

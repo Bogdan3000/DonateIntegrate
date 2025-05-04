@@ -20,6 +20,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
+/**
+ * Implementation of DonationProvider for DonatePay service using WebSocket.
+ */
 public class DonatePayProvider implements DonationProvider {
     private static final String WS_URL = "wss://centrifugo.donatepay.ru:43002/connection/websocket";
     private static final String API_URL = "https://donatepay.ru/api/v2/socket/token";
@@ -27,7 +30,7 @@ public class DonatePayProvider implements DonationProvider {
 
     private WebSocketClient socket;
     private Consumer<DonationEvent> donationHandler;
-    private boolean isConnected;
+    private volatile boolean isConnected;
     private String clientId;
     private final AtomicInteger messageId = new AtomicInteger(3);
     private ScheduledExecutorService pingScheduler;
@@ -35,31 +38,31 @@ public class DonatePayProvider implements DonationProvider {
     @Override
     public void connect() {
         try {
-            // Проверяем, есть ли уже активное соединение
             if (isConnected && socket != null && socket.isOpen()) {
-                DonateIntegrate.LOGGER.info("WebSocket уже подключен, пропускаем повторное подключение");
+                DonateIntegrate.LOGGER.info("WebSocket already connected, skipping reconnect");
                 return;
             }
 
-            // Закрываем старое соединение, если оно существует
             disconnect();
 
             String token = ConfigHandler.getConfig().getDonpayToken();
             String userId = ConfigHandler.getConfig().getUserId();
-            if (token == null || token.isEmpty() || userId == null || userId.isEmpty()) {
-                DonateIntegrate.LOGGER.error("Token or User ID not set");
+            if (token == null || token.trim().isEmpty() || userId == null || !userId.matches("\\d+")) {
+                DonateIntegrate.LOGGER.error("Invalid token or User ID");
+                isConnected = false;
                 return;
             }
 
             String connectionToken = getConnectionToken(token);
             if (connectionToken == null) {
                 DonateIntegrate.LOGGER.error("Failed to obtain connection token");
+                isConnected = false;
                 return;
             }
 
             URI serverUri = new URI(WS_URL);
             Map<String, String> headers = new HashMap<>();
-            headers.put("User-Agent", "Minecraft-DonateIntegrate/2.0.0");
+            headers.put("User-Agent", "Minecraft-DonateIntegrate/2.0.3");
 
             socket = new DonatePayWebSocket(serverUri, token, connectionToken, headers);
             socket.setConnectionLostTimeout(30);
@@ -73,6 +76,7 @@ public class DonatePayProvider implements DonationProvider {
 
             if (!socket.isOpen()) {
                 DonateIntegrate.LOGGER.error("WebSocket connection timeout");
+                isConnected = false;
                 return;
             }
 
@@ -90,7 +94,7 @@ public class DonatePayProvider implements DonationProvider {
         try {
             isConnected = false;
             if (pingScheduler != null) {
-                pingScheduler.shutdown();
+                pingScheduler.shutdownNow();
                 pingScheduler = null;
             }
             if (socket != null) {
@@ -122,7 +126,7 @@ public class DonatePayProvider implements DonationProvider {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.0");
+            conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.3");
             conn.setDoOutput(true);
 
             JsonObject payload = new JsonObject();
@@ -157,17 +161,40 @@ public class DonatePayProvider implements DonationProvider {
         pingScheduler = Executors.newScheduledThreadPool(1);
         pingScheduler.scheduleAtFixedRate(() -> {
             try {
-                if (isConnected && socket != null && socket.isOpen()) {
+                if (socket != null && socket.isOpen()) {
                     JsonObject pingMsg = new JsonObject();
                     pingMsg.addProperty("id", messageId.getAndIncrement());
                     pingMsg.addProperty("method", 7);
                     socket.send(GSON.toJson(pingMsg));
                     DonateIntegrate.LOGGER.debug("Sent ping: {}", pingMsg);
+                    // Проверка подключения с каждым пингом
+                    if (!isValidConnection()) {
+                        isConnected = false;
+                        DonateIntegrate.LOGGER.warn("Connection validation failed");
+                    }
+                } else {
+                    isConnected = false;
                 }
             } catch (Exception e) {
+                isConnected = false;
                 DonateIntegrate.LOGGER.error("Error sending ping: {}", e.getMessage());
             }
         }, 0, 15, TimeUnit.SECONDS);
+    }
+
+    private boolean isValidConnection() {
+        try {
+            if (socket == null || !socket.isOpen()) return false;
+            // Простая проверка: если токен или userId пустые или некорректные, считаем соединение недействительным
+            String token = ConfigHandler.getConfig().getDonpayToken();
+            String userId = ConfigHandler.getConfig().getUserId();
+            if (token == null || token.trim().isEmpty() || userId == null || !userId.matches("\\d+")) {
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private class DonatePayWebSocket extends WebSocketClient {
@@ -219,6 +246,7 @@ public class DonatePayProvider implements DonationProvider {
                 send(GSON.toJson(handshakeMsg));
                 DonateIntegrate.LOGGER.debug("Sent handshake: {}", handshakeMsg);
             } catch (Exception e) {
+                isConnected = false;
                 DonateIntegrate.LOGGER.error("Error sending handshake: {}", e.getMessage());
             }
         }
@@ -226,6 +254,7 @@ public class DonatePayProvider implements DonationProvider {
         private void handleMessage(JsonObject jsonMsg) {
             try {
                 if (jsonMsg.has("error")) {
+                    isConnected = false;
                     DonateIntegrate.LOGGER.error("Server error: {}", jsonMsg.get("error"));
                     return;
                 }
@@ -240,6 +269,7 @@ public class DonatePayProvider implements DonationProvider {
                     handlePushNotification(jsonMsg);
                 }
             } catch (Exception e) {
+                isConnected = false;
                 DonateIntegrate.LOGGER.error("Error processing message: {}", e.getMessage());
             }
         }
@@ -247,12 +277,14 @@ public class DonatePayProvider implements DonationProvider {
         private void handleHandshakeResponse(JsonObject jsonMsg) {
             try {
                 if (!jsonMsg.has("result")) {
+                    isConnected = false;
                     DonateIntegrate.LOGGER.error("Handshake failed: {}", jsonMsg);
                     return;
                 }
 
                 JsonObject result = jsonMsg.getAsJsonObject("result");
                 if (!result.has("client")) {
+                    isConnected = false;
                     DonateIntegrate.LOGGER.error("No client ID: {}", jsonMsg);
                     return;
                 }
@@ -263,6 +295,7 @@ public class DonatePayProvider implements DonationProvider {
                 String channel = "$public:" + ConfigHandler.getConfig().getUserId();
                 String channelToken = getChannelToken(accessToken, clientId, channel);
                 if (channelToken == null) {
+                    isConnected = false;
                     DonateIntegrate.LOGGER.error("Failed to obtain channel token");
                     return;
                 }
@@ -278,6 +311,7 @@ public class DonatePayProvider implements DonationProvider {
                 send(GSON.toJson(subscribeMsg));
                 DonateIntegrate.LOGGER.debug("Sent subscription: {}", subscribeMsg);
             } catch (Exception e) {
+                isConnected = false;
                 DonateIntegrate.LOGGER.error("Error processing handshake: {}", e.getMessage());
             }
         }
@@ -295,7 +329,7 @@ public class DonatePayProvider implements DonationProvider {
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Accept", "application/json");
-                conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.0");
+                conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.3");
                 conn.setDoOutput(true);
 
                 try (java.io.OutputStream os = conn.getOutputStream()) {
@@ -304,6 +338,7 @@ public class DonatePayProvider implements DonationProvider {
                 }
 
                 if (conn.getResponseCode() != 200) {
+                    isConnected = false;
                     DonateIntegrate.LOGGER.error("Failed to get channel token, HTTP code: {}", conn.getResponseCode());
                     return null;
                 }
@@ -326,6 +361,7 @@ public class DonatePayProvider implements DonationProvider {
                     return null;
                 }
             } catch (Exception e) {
+                isConnected = false;
                 DonateIntegrate.LOGGER.error("Error getting channel token: {}", e.getMessage());
                 return null;
             }
@@ -334,11 +370,14 @@ public class DonatePayProvider implements DonationProvider {
         private void handleSubscriptionResponse(JsonObject jsonMsg) {
             try {
                 if (jsonMsg.has("result")) {
+                    isConnected = true;
                     DonateIntegrate.LOGGER.info("Successfully subscribed to donation channel");
                 } else if (jsonMsg.has("error")) {
+                    isConnected = false;
                     DonateIntegrate.LOGGER.error("Subscription error: {}", jsonMsg.get("error"));
                 }
             } catch (Exception e) {
+                isConnected = false;
                 DonateIntegrate.LOGGER.error("Error processing subscription response: {}", e.getMessage());
             }
         }
@@ -348,9 +387,11 @@ public class DonatePayProvider implements DonationProvider {
                 if (jsonMsg.has("result")) {
                     DonateIntegrate.LOGGER.debug("Received ping response: {}", jsonMsg);
                 } else if (jsonMsg.has("error")) {
+                    isConnected = false;
                     DonateIntegrate.LOGGER.error("Ping error: {}", jsonMsg.get("error"));
                 }
             } catch (Exception e) {
+                isConnected = false;
                 DonateIntegrate.LOGGER.error("Error processing ping: {}", e.getMessage());
             }
         }
