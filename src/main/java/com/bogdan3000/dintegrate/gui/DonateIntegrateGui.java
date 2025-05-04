@@ -3,10 +3,12 @@ package com.bogdan3000.dintegrate.gui;
 import com.bogdan3000.dintegrate.DonateIntegrate;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.config.ModConfig;
+import com.bogdan3000.dintegrate.config.Action;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.util.text.TextFormatting;
 import org.lwjgl.input.Keyboard;
 
@@ -15,17 +17,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Main GUI for the DonateIntegrate mod, providing tabs for settings, actions, status, and donation history.
- */
 public class DonateIntegrateGui extends GuiScreen {
     private static final int TAB_COUNT = 4;
     private static final int TAB_WIDTH = 60;
     private static final int TAB_HEIGHT = 20;
-    private static final int GUI_WIDTH = 256;
-    private static final int GUI_HEIGHT = 180;
+    private static final int GUI_WIDTH = 300;
+    private static final int GUI_HEIGHT = 200;
     private int guiLeft, guiTop;
     private int currentTab = 0;
+    private float tabAnimation = 0.0f;
 
     // Settings Tab
     private GuiTextField tokenField;
@@ -45,6 +45,7 @@ public class DonateIntegrateGui extends GuiScreen {
 
     // History Tab
     private DonationHistoryList historyList;
+
     private final List<String> donationHistory = new CopyOnWriteArrayList<>();
 
     @Override
@@ -53,6 +54,7 @@ public class DonateIntegrateGui extends GuiScreen {
         guiTop = (height - GUI_HEIGHT) / 2;
         buttonList.clear();
         Keyboard.enableRepeatEvents(true);
+        tabAnimation = 0.0f;
 
         // Initialize Tabs
         for (int i = 0; i < TAB_COUNT; i++) {
@@ -60,29 +62,29 @@ public class DonateIntegrateGui extends GuiScreen {
         }
 
         // Initialize Settings Tab
-        tokenField = new GuiTextField(100, fontRenderer, guiLeft + 10, guiTop + 30, GUI_WIDTH - 20, 20);
+        tokenField = new GuiTextField(100, fontRenderer, guiLeft + 20, guiTop + 40, GUI_WIDTH - 40, 20);
         tokenField.setMaxStringLength(100);
         tokenField.setText(ConfigHandler.getConfig().getDonpayToken());
-        userIdField = new GuiTextField(101, fontRenderer, guiLeft + 10, guiTop + 70, GUI_WIDTH - 20, 20);
+        userIdField = new GuiTextField(101, fontRenderer, guiLeft + 20, guiTop + 80, GUI_WIDTH - 40, 20);
         userIdField.setMaxStringLength(20);
         userIdField.setText(ConfigHandler.getConfig().getUserId());
-        saveSettingsButton = new GuiButton(102, guiLeft + 10, guiTop + 110, 100, 20, "Save");
-        clearSettingsButton = new GuiButton(103, guiLeft + GUI_WIDTH - 110, guiTop + 110, 100, 20, "Clear");
+        saveSettingsButton = new GuiButton(102, guiLeft + 20, guiTop + 120, 100, 20, "Save");
+        clearSettingsButton = new GuiButton(103, guiLeft + GUI_WIDTH - 120, guiTop + 120, 100, 20, "Clear");
         buttonList.add(saveSettingsButton);
         buttonList.add(clearSettingsButton);
 
         // Initialize Actions Tab
-        actionList = new ActionList(this, guiLeft + 10, guiTop + 30, GUI_WIDTH - 20, 100);
-        addActionButton = new GuiButton(104, guiLeft + 10, guiTop + 140, 80, 20, "Add Action");
-        editActionButton = new GuiButton(105, guiLeft + 98, guiTop + 140, 80, 20, "Edit Action");
-        deleteActionButton = new GuiButton(106, guiLeft + 186, guiTop + 140, 80, 20, "Delete Action");
+        actionList = new ActionList(this, guiLeft + 10, guiTop + 30, GUI_WIDTH - 20, 120);
+        addActionButton = new GuiButton(104, guiLeft + 20, guiTop + 160, 80, 20, "Add Action");
+        editActionButton = new GuiButton(105, guiLeft + 110, guiTop + 160, 80, 20, "Edit Action");
+        deleteActionButton = new GuiButton(106, guiLeft + 200, guiTop + 160, 80, 20, "Delete Action");
         buttonList.add(addActionButton);
         buttonList.add(editActionButton);
         buttonList.add(deleteActionButton);
 
         // Initialize Status Tab
-        reconnectButton = new GuiButton(107, guiLeft + 10, guiTop + 140, 100, 20, "Reconnect");
-        enableToggleButton = new GuiButton(108, guiLeft + GUI_WIDTH - 110, guiTop + 140, 100, 20,
+        reconnectButton = new GuiButton(107, guiLeft + 20, guiTop + 160, 100, 20, "Reconnect");
+        enableToggleButton = new GuiButton(108, guiLeft + GUI_WIDTH - 120, guiTop + 160, 100, 20,
                 ConfigHandler.getConfig().isEnabled() ? "Disable" : "Enable");
         buttonList.add(reconnectButton);
         buttonList.add(enableToggleButton);
@@ -110,7 +112,7 @@ public class DonateIntegrateGui extends GuiScreen {
         saveSettingsButton.visible = currentTab == 0;
         clearSettingsButton.visible = currentTab == 0;
 
-        actionList.visible = (currentTab == 1);
+        actionList.setVisible(currentTab == 1);
         addActionButton.visible = currentTab == 1;
         editActionButton.visible = currentTab == 1;
         deleteActionButton.visible = currentTab == 1;
@@ -118,13 +120,14 @@ public class DonateIntegrateGui extends GuiScreen {
         reconnectButton.visible = currentTab == 2;
         enableToggleButton.visible = currentTab == 2;
 
-        historyList.visible = (currentTab == 3);
+        historyList.setVisible(currentTab == 3);
     }
 
     @Override
     protected void actionPerformed(GuiButton button) throws IOException {
         if (button.id < TAB_COUNT) {
             currentTab = button.id;
+            tabAnimation = 0.0f;
             updateTabVisibility();
         } else {
             ModConfig config = ConfigHandler.getConfig();
@@ -144,7 +147,7 @@ public class DonateIntegrateGui extends GuiScreen {
                     mc.displayGuiScreen(new ActionEditGui(this, null));
                     break;
                 case 105: // Edit Action
-                    com.bogdan3000.dintegrate.config.Action selectedAction = actionList.getSelectedAction();
+                    Action selectedAction = actionList.getSelectedAction();
                     if (selectedAction != null) {
                         mc.displayGuiScreen(new ActionEditGui(this, selectedAction));
                     } else {
@@ -207,24 +210,38 @@ public class DonateIntegrateGui extends GuiScreen {
     }
 
     @Override
-    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        // Draw full black background
-        drawDefaultBackground(); // Удаляем, чтобы избежать текстуры земли
-        drawRect(guiLeft, guiTop, guiLeft + GUI_WIDTH, guiTop + GUI_HEIGHT, 0xFF000000);
+    public void updateScreen() {
+        super.updateScreen();
+        if (tabAnimation < 1.0f) {
+            tabAnimation += 0.1f;
+            if (tabAnimation > 1.0f) tabAnimation = 1.0f;
+        }
+    }
 
-        // Draw Tabs with hover effect
+    @Override
+    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        drawDefaultBackground();
+        drawGuiBackground();
+
+        // Draw Tabs with animation
+        GlStateManager.pushMatrix();
+        GlStateManager.enableBlend();
         for (GuiButton button : buttonList) {
             if (button.id < TAB_COUNT) {
-                boolean isHovered = mouseX >= button.x && mouseX < button.x + button.width &&
-                        mouseY >= button.y && mouseY < button.y + button.height;
-                drawRect(button.x, button.y, button.x + button.width, button.y + button.height,
-                        isHovered ? 0xFFAAAAAA : 0xFF777777);
+                float scale = button.id == currentTab ? 1.0f + 0.1f * tabAnimation : 1.0f;
+                GlStateManager.pushMatrix();
+                GlStateManager.translate(button.x + button.width / 2f, button.y + button.height / 2f, 0);
+                GlStateManager.scale(scale, scale, 1.0f);
+                GlStateManager.translate(-(button.x + button.width / 2f), -(button.y + button.height / 2f), 0);
                 button.drawButton(mc, mouseX, mouseY, partialTicks);
                 if (button.id == currentTab) {
                     drawRect(button.x, button.y + button.height - 2, button.x + button.width, button.y + button.height, 0xFFFFFFFF);
                 }
+                GlStateManager.popMatrix();
             }
         }
+        GlStateManager.disableBlend();
+        GlStateManager.popMatrix();
 
         // Draw Tab Content
         switch (currentTab) {
@@ -245,44 +262,42 @@ public class DonateIntegrateGui extends GuiScreen {
         super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
+    private void drawGuiBackground() {
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+        drawRect(guiLeft, guiTop, guiLeft + GUI_WIDTH, guiTop + GUI_HEIGHT, 0xFF2A2A2A);
+        drawRect(guiLeft + 2, guiTop + 2, guiLeft + GUI_WIDTH - 2, guiTop + GUI_HEIGHT - 2, 0xFF1E1E1E);
+        drawRect(guiLeft + 4, guiTop + 4, guiLeft + GUI_WIDTH - 4, guiTop + GUI_HEIGHT - 4, 0xFF333333);
+    }
+
     private void drawSettingsTab(int mouseX, int mouseY, float partialTicks) {
-        drawString(fontRenderer, "DonatePay Token:", guiLeft + 10, guiTop + 20, 0xFFFFFF);
+        drawString(fontRenderer, "DonatePay Token:", guiLeft + 20, guiTop + 30, 0xFFFFFF);
         tokenField.drawTextBox();
-        drawString(fontRenderer, "User ID:", guiLeft + 10, guiTop + 60, 0xFFFFFF);
+        drawString(fontRenderer, "User ID:", guiLeft + 20, guiTop + 70, 0xFFFFFF);
         userIdField.drawTextBox();
     }
 
     private void drawActionsTab(int mouseX, int mouseY, float partialTicks) {
-        if (actionList.visible) {
-            actionList.drawScreen(mouseX, mouseY, partialTicks);
-            addActionButton.drawButton(mc, mouseX, mouseY, partialTicks);
-            editActionButton.drawButton(mc, mouseX, mouseY, partialTicks);
-            deleteActionButton.drawButton(mc, mouseX, mouseY, partialTicks);
-        }
+        actionList.drawScreen(mouseX, mouseY, partialTicks);
     }
 
     private void drawStatusTab(int mouseX, int mouseY, float partialTicks) {
         ModConfig config = ConfigHandler.getConfig();
-        int y = guiTop + 20;
-        drawString(fontRenderer, "Enabled: " + (config.isEnabled() ? TextFormatting.GREEN + "Yes" : TextFormatting.RED + "No"), guiLeft + 10, y, 0xFFFFFF);
+        int y = guiTop + 30;
+        drawString(fontRenderer, "Enabled: " + (config.isEnabled() ? TextFormatting.GREEN + "Yes" : TextFormatting.RED + "No"), guiLeft + 20, y, 0xFFFFFF);
         y += 15;
-        drawString(fontRenderer, "Connected: " + (DonateIntegrate.getInstance().getDonationProvider().isConnected() ? TextFormatting.GREEN + "Yes" : TextFormatting.RED + "No"), guiLeft + 10, y, 0xFFFFFF);
+        drawString(fontRenderer, "Connected: " + (DonateIntegrate.getInstance().getDonationProvider().isConnected() ? TextFormatting.GREEN + "Yes" : TextFormatting.RED + "No"), guiLeft + 20, y, 0xFFFFFF);
         y += 15;
-        drawString(fontRenderer, "Last Donation ID: " + config.getLastDonate(), guiLeft + 10, y, 0xFFFFFF);
+        drawString(fontRenderer, "Last Donation ID: " + config.getLastDonate(), guiLeft + 20, y, 0xFFFFFF);
         y += 15;
-        drawString(fontRenderer, "Token: " + (config.getDonpayToken().isEmpty() ? TextFormatting.RED + "Not Set" : TextFormatting.GREEN + "Set"), guiLeft + 10, y, 0xFFFFFF);
+        drawString(fontRenderer, "Token: " + (config.getDonpayToken().isEmpty() ? TextFormatting.RED + "Not Set" : TextFormatting.GREEN + "Set"), guiLeft + 20, y, 0xFFFFFF);
         y += 15;
-        drawString(fontRenderer, "User ID: " + (config.getUserId().isEmpty() ? TextFormatting.RED + "Not Set" : config.getUserId()), guiLeft + 10, y, 0xFFFFFF);
+        drawString(fontRenderer, "User ID: " + (config.getUserId().isEmpty() ? TextFormatting.RED + "Not Set" : config.getUserId()), guiLeft + 20, y, 0xFFFFFF);
         y += 15;
-        drawString(fontRenderer, "Actions Configured: " + config.getActions().size(), guiLeft + 10, y, 0xFFFFFF);
-        reconnectButton.drawButton(mc, mouseX, mouseY, partialTicks);
-        enableToggleButton.drawButton(mc, mouseX, mouseY, partialTicks);
+        drawString(fontRenderer, "Actions Configured: " + config.getActions().size(), guiLeft + 20, y, 0xFFFFFF);
     }
 
     private void drawHistoryTab(int mouseX, int mouseY, float partialTicks) {
-        if (historyList.visible) {
-            historyList.drawScreen(mouseX, mouseY, partialTicks);
-        }
+        historyList.drawScreen(mouseX, mouseY, partialTicks);
     }
 
     @Override
@@ -290,19 +305,12 @@ public class DonateIntegrateGui extends GuiScreen {
         Keyboard.enableRepeatEvents(false);
     }
 
-    /**
-     * Adds a donation entry to the history and updates the history list.
-     *
-     * @param donationInfo The donation information to add.
-     */
     public void addDonationToHistory(String donationInfo) {
-        Minecraft.getMinecraft().addScheduledTask(() -> {
-            donationHistory.add(0, donationInfo);
-            if (donationHistory.size() > 100) {
-                donationHistory.remove(donationHistory.size() - 1);
-            }
-            updateHistoryList();
-        });
+        donationHistory.add(0, donationInfo);
+        if (donationHistory.size() > 100) {
+            donationHistory.remove(donationHistory.size() - 1);
+        }
+        updateHistoryList();
     }
 
     private void updateHistoryList() {
@@ -316,4 +324,5 @@ public class DonateIntegrateGui extends GuiScreen {
     public void refreshActionList() {
         actionList.refreshList();
     }
+
 }

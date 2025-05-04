@@ -2,31 +2,29 @@ package com.bogdan3000.dintegrate.gui;
 
 import com.bogdan3000.dintegrate.config.Action;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiSlot;
 import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.gui.GuiListExtended;
+import net.minecraft.client.gui.GuiListExtended.IGuiListEntry;
 import org.lwjgl.input.Keyboard;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * GUI for adding or editing an action, allowing configuration of sum, commands, priority, and execution mode.
- */
 public class ActionEditGui extends GuiScreen {
     private final DonateIntegrateGui parent;
     private final Action action;
+    private final boolean isNewAction;
     private GuiTextField sumField;
     private GuiTextField priorityField;
     private GuiButton enabledButton;
     private GuiButton modeButton;
     private GuiButton saveButton;
     private GuiButton cancelButton;
-    private CommandSlot commandSlot;
-    private boolean isNewAction;
+    private CommandList commandList;
 
     public ActionEditGui(DonateIntegrateGui parent, Action action) {
         this.parent = parent;
@@ -47,67 +45,66 @@ public class ActionEditGui extends GuiScreen {
         priorityField = new GuiTextField(1, fontRenderer, centerX - 100, centerY - 40, 200, 20);
         priorityField.setText(String.valueOf(action.getPriority()));
 
-        commandSlot = new CommandSlot(this, mc, centerX - 100, centerY, 200, 100, 20);
-        // Передаем команды напрямую
-        commandSlot.setCommands(action.getCommands());
+        commandList = new CommandList(this, centerX - 110, centerY - 10, 220, 80, action.getCommands());
 
-        enabledButton = new GuiButton(2, centerX - 100, centerY + 110, 98, 20, "Enabled: " + (action.isEnabled() ? "Yes" : "No"));
-        modeButton = new GuiButton(3, centerX + 2, centerY + 110, 98, 20, "Mode: " + action.getExecutionMode());
-        saveButton = new GuiButton(4, centerX - 100, centerY + 140, 98, 20, "Save");
-        cancelButton = new GuiButton(5, centerX + 2, centerY + 140, 98, 20, "Cancel");
+        enabledButton = new GuiButton(2, centerX - 100, centerY + 80, 98, 20, "Enabled: " + (action.isEnabled() ? "Yes" : "No"));
+        modeButton = new GuiButton(3, centerX + 2, centerY + 80, 98, 20, "Mode: " + action.getExecutionMode());
+        saveButton = new GuiButton(4, centerX - 100, centerY + 110, 98, 20, "Save");
+        cancelButton = new GuiButton(5, centerX + 2, centerY + 110, 98, 20, "Cancel");
 
         buttonList.add(enabledButton);
         buttonList.add(modeButton);
         buttonList.add(saveButton);
         buttonList.add(cancelButton);
+
+        buttonList.add(new GuiButton(6, centerX + 110, centerY - 10, 20, 20, "+"));
+        buttonList.add(new GuiButton(7, centerX + 110, centerY + 10, 20, 20, "−"));
     }
 
     @Override
     protected void actionPerformed(GuiButton button) throws IOException {
-        if (button.id == 200) { // Add command
-            commandSlot.addCommandField();
-        } else if (button.id == 300) { // Remove command
-            commandSlot.removeCommandField();
-        } else {
-            switch (button.id) {
-                case 2: // Toggle Enabled
-                    action.setEnabled(!action.isEnabled());
-                    enabledButton.displayString = "Enabled: " + (action.isEnabled() ? "Yes" : "No");
-                    break;
-                case 3: // Toggle Mode
-                    action.setExecutionMode(action.getExecutionMode() == Action.ExecutionMode.ALL ? Action.ExecutionMode.RANDOM_ONE : Action.ExecutionMode.ALL);
-                    modeButton.displayString = "Mode: " + action.getExecutionMode();
-                    break;
-                case 4: // Save
-                    try {
-                        float sum = Float.parseFloat(sumField.getText().trim());
-                        if (sum <= 0) throw new IllegalArgumentException("Sum must be positive");
-                        int priority = Integer.parseInt(priorityField.getText().trim());
-                        if (priority < 0) throw new IllegalArgumentException("Priority cannot be negative");
-                        List<String> commands = commandSlot.getCommands();
-                        if (commands.isEmpty()) {
-                            mc.displayGuiScreen(new MessageGui(parent, "At least one command is required!", false));
-                            return;
-                        }
-                        action.setSum(sum);
-                        action.setPriority(priority);
-                        action.setCommands(commands);
-                        if (isNewAction) {
-                            ConfigHandler.getConfig().getActions().add(action);
-                        }
-                        ConfigHandler.save();
-                        parent.refreshActionList();
-                        mc.displayGuiScreen(new MessageGui(parent, isNewAction ? "Action added!" : "Action updated!", true));
-                    } catch (NumberFormatException e) {
-                        mc.displayGuiScreen(new MessageGui(parent, "Invalid sum or priority!", false));
-                    } catch (IllegalArgumentException e) {
-                        mc.displayGuiScreen(new MessageGui(parent, e.getMessage(), false));
+        switch (button.id) {
+            case 2: // Toggle Enabled
+                action.setEnabled(!action.isEnabled());
+                enabledButton.displayString = "Enabled: " + (action.isEnabled() ? "Yes" : "No");
+                break;
+            case 3: // Toggle Mode
+                action.setExecutionMode(action.getExecutionMode() == Action.ExecutionMode.ALL ? Action.ExecutionMode.RANDOM_ONE : Action.ExecutionMode.ALL);
+                modeButton.displayString = "Mode: " + action.getExecutionMode();
+                break;
+            case 4: // Save
+                try {
+                    float sum = Float.parseFloat(sumField.getText().trim());
+                    int priority = Integer.parseInt(priorityField.getText().trim());
+                    List<String> commands = commandList.getCommands();
+                    if (commands.isEmpty()) {
+                        mc.displayGuiScreen(new MessageGui(parent, "At least one command is required!", false));
+                        return;
                     }
-                    break;
-                case 5: // Cancel
-                    mc.displayGuiScreen(parent);
-                    break;
-            }
+                    action.setSum(sum);
+                    action.setPriority(priority);
+                    action.setCommands(commands);
+                    if (isNewAction) {
+                        ConfigHandler.getConfig().getActions().add(action);
+                    }
+                    ConfigHandler.save();
+                    parent.refreshActionList();
+                    mc.displayGuiScreen(new MessageGui(parent, isNewAction ? "Action added!" : "Action updated!", true));
+                } catch (NumberFormatException e) {
+                    mc.displayGuiScreen(new MessageGui(parent, "Invalid sum or priority!", false));
+                } catch (IllegalArgumentException e) {
+                    mc.displayGuiScreen(new MessageGui(parent, e.getMessage(), false));
+                }
+                break;
+            case 5: // Cancel
+                mc.displayGuiScreen(parent);
+                break;
+            case 6: // Add Command
+                commandList.addCommand("");
+                break;
+            case 7: // Remove Command
+                commandList.removeLastCommand();
+                break;
         }
     }
 
@@ -119,7 +116,7 @@ public class ActionEditGui extends GuiScreen {
         }
         sumField.textboxKeyTyped(typedChar, keyCode);
         priorityField.textboxKeyTyped(typedChar, keyCode);
-        commandSlot.keyTyped(typedChar, keyCode);
+        commandList.keyTyped(typedChar, keyCode);
     }
 
     @Override
@@ -127,20 +124,31 @@ public class ActionEditGui extends GuiScreen {
         super.mouseClicked(mouseX, mouseY, mouseButton);
         sumField.mouseClicked(mouseX, mouseY, mouseButton);
         priorityField.mouseClicked(mouseX, mouseY, mouseButton);
-        commandSlot.mouseClicked(mouseX, mouseY, mouseButton);
+        commandList.mouseClicked(mouseX, mouseY, mouseButton);
     }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        drawRect(0, 0, width, height, 0xFF000000);
+        drawDefaultBackground();
+        drawGuiBackground();
+
         drawCenteredString(fontRenderer, isNewAction ? "Add Action" : "Edit Action", width / 2, height / 2 - 100, 0xFFFFFF);
         drawString(fontRenderer, "Sum:", width / 2 - 100, height / 2 - 90, 0xFFFFFF);
         sumField.drawTextBox();
         drawString(fontRenderer, "Priority:", width / 2 - 100, height / 2 - 50, 0xFFFFFF);
         priorityField.drawTextBox();
-        drawString(fontRenderer, "Commands:", width / 2 - 100, height / 2 - 10, 0xFFFFFF);
-        commandSlot.drawScreen(mouseX, mouseY, partialTicks);
+        drawString(fontRenderer, "Commands:", width / 2 - 100, height / 2 - 20, 0xFFFFFF);
+        commandList.drawScreen(mouseX, mouseY, partialTicks);
+
         super.drawScreen(mouseX, mouseY, partialTicks);
+    }
+
+    private void drawGuiBackground() {
+        int centerX = width / 2;
+        int centerY = height / 2;
+        drawRect(centerX - 150, centerY - 120, centerX + 150, centerY + 150, 0xFF2A2A2A);
+        drawRect(centerX - 148, centerY - 118, centerX + 148, centerY + 148, 0xFF1E1E1E);
+        drawRect(centerX - 146, centerY - 116, centerX + 146, centerY + 146, 0xFF333333);
     }
 
     @Override
@@ -148,124 +156,38 @@ public class ActionEditGui extends GuiScreen {
         Keyboard.enableRepeatEvents(false);
     }
 
-    private class CommandSlot extends GuiSlot {
-        private final List<GuiTextField> commandFields = new ArrayList<>();
-        private final List<GuiButton> addButtons = new ArrayList<>();
-        private final List<GuiButton> removeButtons = new ArrayList<>();
+    private static class CommandList extends GuiListExtended {
+        private final ActionEditGui parent;
+        private final List<CommandEntry> commandEntries = new ArrayList<>();
+        private int nextId = 0;
 
-        public CommandSlot(GuiScreen parent, Minecraft mcIn, int x, int y, int width, int height, int slotHeight) {
-            super(mcIn, width, height, y, y + height, slotHeight);
+        public CommandList(ActionEditGui parent, int x, int y, int width, int height, List<String> initialCommands) {
+            super(parent.mc, width, height, y, y + height, 24);
+            this.parent = parent;
             this.left = x;
-            this.top = y;
-            this.width = width;
-            this.height = height;
-            List<String> commands = new ArrayList<>();
-            if (commands.isEmpty()) {
-                commands.add("");
+            this.right = x + width;
+            for (String cmd : initialCommands) {
+                addCommand(cmd);
             }
-            for (String cmd : commands) {
-                addCommandField(cmd);
-            }
-            if (commandFields.size() == 1) {
-                removeButtons.get(0).enabled = false;
+            if (commandEntries.isEmpty()) {
+                addCommand("");
             }
         }
 
-        public void setCommands(List<String> commands) {
-            commandFields.clear();
-            addButtons.clear();
-            removeButtons.clear();
-            buttonList.removeIf(button -> button.id >= 200 && button.id < 400);
-            if (commands.isEmpty()) {
-                commands.add("");
-            }
-            for (String cmd : commands) {
-                addCommandField(cmd);
-            }
-            if (commandFields.size() == 1) {
-                removeButtons.get(0).enabled = false;
-            }
+        public void addCommand(String command) {
+            commandEntries.add(new CommandEntry(nextId++, command));
         }
 
-        @Override
-        protected int getSize() {
-            return commandFields.size();
-        }
-
-        @Override
-        protected void elementClicked(int slotIndex, boolean isDoubleClick, int mouseX, int mouseY) {
-        }
-
-        @Override
-        protected boolean isSelected(int slotIndex) {
-            return false;
-        }
-
-        @Override
-        protected void drawBackground() {
-        }
-
-        @Override
-        protected void drawSlot(int slotIndex, int x, int y, int heightIn, int mouseXIn, int mouseYIn, float partialTicks) {
-            GuiTextField field = commandFields.get(slotIndex);
-            field.x = x;
-            field.y = y;
-            field.width = width - 40;
-            field.height = this.slotHeight;
-            field.drawTextBox();
-
-            GuiButton addButton = addButtons.get(slotIndex);
-            addButton.x = x + width - 40;
-            addButton.y = y;
-            addButton.drawButton(mc, mouseXIn, mouseYIn, partialTicks);
-
-            GuiButton removeButton = removeButtons.get(slotIndex);
-            removeButton.x = x + width - 20;
-            removeButton.y = y;
-            removeButton.drawButton(mc, mouseXIn, mouseYIn, partialTicks);
-        }
-
-        public void addCommandField() {
-            GuiTextField newField = new GuiTextField(100 + commandFields.size(), fontRenderer, 0, 0, width - 40, this.slotHeight);
-            commandFields.add(newField);
-            GuiButton addButton = new GuiButton(200 + addButtons.size(), 0, 0, 20, 20, "+");
-            GuiButton removeButton = new GuiButton(300 + removeButtons.size(), 0, 0, 20, 20, "−");
-            addButtons.add(addButton);
-            removeButtons.add(removeButton);
-            buttonList.add(addButton);
-            buttonList.add(removeButton);
-            if (commandFields.size() > 1) {
-                removeButtons.get(removeButtons.size() - 2).enabled = true;
-            }
-        }
-
-        public void addCommandField(String command) {
-            GuiTextField newField = new GuiTextField(100 + commandFields.size(), fontRenderer, 0, 0, width - 40, this.slotHeight);
-            newField.setText(command);
-            commandFields.add(newField);
-            GuiButton addButton = new GuiButton(200 + addButtons.size(), 0, 0, 20, 20, "+");
-            GuiButton removeButton = new GuiButton(300 + removeButtons.size(), 0, 0, 20, 20, "−");
-            addButtons.add(addButton);
-            removeButtons.add(removeButton);
-            buttonList.add(addButton);
-            buttonList.add(removeButton);
-        }
-
-        public void removeCommandField() {
-            if (commandFields.size() <= 1) return;
-            int lastIndex = commandFields.size() - 1;
-            commandFields.remove(lastIndex);
-            buttonList.remove(addButtons.remove(lastIndex));
-            buttonList.remove(removeButtons.remove(lastIndex));
-            if (commandFields.size() == 1) {
-                removeButtons.get(0).enabled = false;
+        public void removeLastCommand() {
+            if (!commandEntries.isEmpty()) {
+                commandEntries.remove(commandEntries.size() - 1);
             }
         }
 
         public List<String> getCommands() {
             List<String> commands = new ArrayList<>();
-            for (GuiTextField field : commandFields) {
-                String cmd = field.getText().trim();
+            for (CommandEntry entry : commandEntries) {
+                String cmd = entry.textField.getText().trim();
                 if (!cmd.isEmpty()) {
                     commands.add(cmd);
                 }
@@ -273,15 +195,66 @@ public class ActionEditGui extends GuiScreen {
             return commands;
         }
 
+        @Override
+        protected int getSize() {
+            return commandEntries.size();
+        }
+
+        @Override
+        public IGuiListEntry getListEntry(int index) {
+            return commandEntries.get(index);
+        }
+
+        @Override
+        protected boolean isSelected(int slotIndex) {
+            return false;
+        }
+
         public void keyTyped(char typedChar, int keyCode) {
-            for (GuiTextField field : commandFields) {
-                field.textboxKeyTyped(typedChar, keyCode);
+            for (CommandEntry entry : commandEntries) {
+                entry.textField.textboxKeyTyped(typedChar, keyCode);
             }
         }
 
-        public void mouseClicked(int mouseX, int mouseY, int mouseButton) {
-            for (GuiTextField field : commandFields) {
-                field.mouseClicked(mouseX, mouseY, mouseButton);
+        @Override
+        public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+            boolean handled = false;
+            for (CommandEntry entry : commandEntries) {
+                if (entry.textField.mouseClicked(mouseX, mouseY, mouseButton)) {
+                    handled = true;
+                }
+            }
+            return handled || super.mouseClicked(mouseX, mouseY, mouseButton);
+        }
+
+        private class CommandEntry implements IGuiListEntry {
+            private final int id;
+            private final GuiTextField textField;
+
+            public CommandEntry(int id, String command) {
+                this.id = id;
+                this.textField = new GuiTextField(id, parent.fontRenderer, 0, 0, width - 10, 20);
+                this.textField.setText(command);
+            }
+
+            @Override
+            public void drawEntry(int slotIndex, int x, int y, int listWidth, int slotHeight, int mouseX, int mouseY, boolean isSelected, float partialTicks) {
+                textField.x = x + 5;
+                textField.y = y + 2;
+                textField.drawTextBox();
+            }
+
+            @Override
+            public boolean mousePressed(int slotIndex, int mouseX, int mouseY, int mouseEvent, int relativeX, int relativeY) {
+                return textField.mouseClicked(mouseX, mouseY, 0);
+            }
+
+            @Override
+            public void mouseReleased(int slotIndex, int x, int y, int mouseEvent, int relativeX, int relativeY) {
+            }
+
+            @Override
+            public void updatePosition(int slotIndex, int x, int y, float partialTicks) {
             }
         }
     }

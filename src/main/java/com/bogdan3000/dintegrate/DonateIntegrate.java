@@ -6,8 +6,6 @@ import com.bogdan3000.dintegrate.donation.DonationProvider;
 import com.bogdan3000.dintegrate.donation.DonatePayProvider;
 import com.bogdan3000.dintegrate.gui.DonateIntegrateGui;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.settings.KeyBinding;
-import net.minecraftforge.client.settings.KeyConflictContext;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod;
@@ -17,11 +15,8 @@ import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
 import net.minecraftforge.fml.common.event.FMLServerStoppingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
-import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.lwjgl.input.Keyboard;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -37,12 +32,6 @@ public class DonateIntegrate {
 
     private static final ConcurrentLinkedQueue<CommandToExecute> commands = new ConcurrentLinkedQueue<>();
     private static final long COMMAND_COOLDOWN_MS = 1; // 0.01 second between commands
-    private static final KeyBinding KEY_OPEN_GUI = new KeyBinding(
-            "key.dintegrate.open_gui",
-            KeyConflictContext.IN_GAME,
-            Keyboard.KEY_NONE,
-            "key.categories.dintegrate"
-    );
 
     private static DonationProvider donationProvider;
     private static ExecutorService commandExecutor;
@@ -72,10 +61,7 @@ public class DonateIntegrate {
         LOGGER.info("Initializing DonateIntegrate");
         instance = this;
         ConfigHandler.register(event.getSuggestedConfigurationFile());
-        if (event.getSide() == Side.CLIENT) {
-            ClientRegistry.registerKeyBinding(KEY_OPEN_GUI);
-            MinecraftForge.EVENT_BUS.register(new ClientTickHandler());
-        }
+        ClientRegistry.registerKeyBinding(KeyHandler.KEY_OPEN_GUI);
     }
 
     public static DonateIntegrate getInstance() {
@@ -88,8 +74,9 @@ public class DonateIntegrate {
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
-        LOGGER.info("Registering server tick handler");
+        LOGGER.info("Registering server tick handler and key handler");
         MinecraftForge.EVENT_BUS.register(new ServerTickHandler());
+        MinecraftForge.EVENT_BUS.register(new KeyHandler());
         commandExecutor = Executors.newFixedThreadPool(2);
         initializeDonationProvider();
         NetworkHandler.init();
@@ -243,17 +230,6 @@ public class DonateIntegrate {
                         }
                     });
                 }
-            }
-        }
-    }
-
-    @SideOnly(Side.CLIENT)
-    public static class ClientTickHandler {
-        @SubscribeEvent
-        public void onClientTick(TickEvent.ClientTickEvent event) {
-            if (event.phase != TickEvent.Phase.END) return;
-            if (KEY_OPEN_GUI.isPressed() && Minecraft.getMinecraft().currentScreen == null) {
-                Minecraft.getMinecraft().displayGuiScreen(new DonateIntegrateGui());
             }
         }
     }
