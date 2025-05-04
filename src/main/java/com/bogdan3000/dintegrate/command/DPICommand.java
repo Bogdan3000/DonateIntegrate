@@ -18,7 +18,7 @@ public class DPICommand extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/dpi [set_token <token>|set_userid <userId>|status|reload|test <username> <amount>]";
+        return "/dpi [set_token <token>|set_userid <userId>|enable|disable|status|reload|test <username> <amount>]";
     }
 
     @Override
@@ -37,13 +37,14 @@ public class DPICommand extends CommandBase {
                     throw new CommandException("Usage: /dpi set_token <token>");
                 }
                 String token = args[1];
+                if (token.length() < 10) {
+                    throw new CommandException("Token too short");
+                }
                 config.setDonpayToken(token);
                 ConfigHandler.save(config);
-                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonatePay token set!"));
-                DonateIntegrate.LOGGER.info("DonatePay token updated by {}", sender.getName());
-
-                // Restart the WebSocket client to use the new token
-                DonateIntegrate.startWebSocketClient();
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonatePay token updated"));
+                DonateIntegrate.LOGGER.info("Token updated by {}", sender.getName());
+                DonateIntegrate.startWebSocketHandler();
                 break;
 
             case "set_userid":
@@ -51,13 +52,28 @@ public class DPICommand extends CommandBase {
                     throw new CommandException("Usage: /dpi set_userid <userId>");
                 }
                 String userId = args[1];
+                if (!userId.matches("\\d+")) {
+                    throw new CommandException("User ID must be numeric");
+                }
                 config.setUserId(userId);
                 ConfigHandler.save(config);
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "User ID set to " + userId));
-                DonateIntegrate.LOGGER.info("User ID updated to {} by {}", userId, sender.getName());
+                DonateIntegrate.LOGGER.info("User ID set to {} by {}", userId, sender.getName());
+                DonateIntegrate.startWebSocketHandler();
+                break;
 
-                // Restart the WebSocket client to use the new user ID
-                DonateIntegrate.startWebSocketClient();
+            case "enable":
+                config.setEnabled(true);
+                ConfigHandler.save(config);
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonateIntegrate enabled"));
+                DonateIntegrate.startWebSocketHandler();
+                break;
+
+            case "disable":
+                config.setEnabled(false);
+                ConfigHandler.save(config);
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonateIntegrate disabled"));
+                DonateIntegrate.stopWebSocketHandler();
                 break;
 
             case "status":
@@ -65,8 +81,8 @@ public class DPICommand extends CommandBase {
                 break;
 
             case "reload":
-                DonateIntegrate.startWebSocketClient();
-                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "WebSocket client restarted!"));
+                DonateIntegrate.startWebSocketHandler();
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "WebSocket handler reloaded"));
                 break;
 
             case "test":
@@ -80,7 +96,6 @@ public class DPICommand extends CommandBase {
                 } catch (NumberFormatException e) {
                     throw new CommandException("Amount must be a number");
                 }
-
                 testDonation(sender, username, amount);
                 break;
 
@@ -92,10 +107,12 @@ public class DPICommand extends CommandBase {
 
     private void showHelp(ICommandSender sender) {
         sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "=== DonateIntegrate Commands ==="));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_token <token> " + TextFormatting.GRAY + "- Set your DonatePay API token"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_userid <userId> " + TextFormatting.GRAY + "- Set your DonatePay user ID"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi status " + TextFormatting.GRAY + "- Show current configuration status"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi reload " + TextFormatting.GRAY + "- Restart the WebSocket connection"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_token <token> " + TextFormatting.GRAY + "- Set DonatePay API token"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_userid <userId> " + TextFormatting.GRAY + "- Set DonatePay user ID"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi enable " + TextFormatting.GRAY + "- Enable donation processing"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi disable " + TextFormatting.GRAY + "- Disable donation processing"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi status " + TextFormatting.GRAY + "- Show configuration status"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi reload " + TextFormatting.GRAY + "- Reload WebSocket connection"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi test <username> <amount> " + TextFormatting.GRAY + "- Test a donation"));
     }
 
@@ -107,7 +124,7 @@ public class DPICommand extends CommandBase {
         String token = config.getDonpayToken();
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Token: " +
                 (token.isEmpty() ? TextFormatting.RED + "Not set" :
-                        TextFormatting.GREEN + "Set (" + token.substring(0, 4) + "..." + token.substring(token.length() - 4) + ")")));
+                        TextFormatting.GREEN + "Set (" + maskToken(token) + ")")));
 
         String userId = config.getUserId();
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "User ID: " +
@@ -115,6 +132,11 @@ public class DPICommand extends CommandBase {
 
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Last donation ID: " + TextFormatting.AQUA + config.getLastDonate()));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Configured actions: " + TextFormatting.AQUA + config.getActions().size()));
+    }
+
+    private String maskToken(String token) {
+        if (token.length() <= 10) return token;
+        return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
     }
 
     private void testDonation(ICommandSender sender, String username, int amount) {
@@ -126,10 +148,16 @@ public class DPICommand extends CommandBase {
                 String command = action.getCommand().replace("{username}", username);
                 String title = action.getMessage().replace("{username}", username);
 
-                DonateIntegrate.commands.add("title @a title \"" + title + "\"");
-                DonateIntegrate.commands.add(command);
+                if (command.startsWith("/")) {
+                    command = "/execute as @s run " + command.substring(1);
+                } else {
+                    command = "/say " + command;
+                }
 
-                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Test donation triggered! " +
+                DonateIntegrate.commands.add(command);
+                DonateIntegrate.commands.add("title @a title \"" + title + "\"");
+
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Test donation triggered: " +
                         TextFormatting.YELLOW + username + TextFormatting.GREEN + " donated " +
                         TextFormatting.GOLD + amount));
                 actionFound = true;
