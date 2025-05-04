@@ -4,8 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Action {
-    private int sum;
+    private float sum;
     private boolean enabled;
+    private int priority;
     private List<String> commands;
     private ExecutionMode executionMode;
 
@@ -15,46 +16,44 @@ public class Action {
     }
 
     public Action() {
+        this.sum = 0.0f;
+        this.enabled = true;
+        this.priority = 1;
         this.commands = new ArrayList<>();
         this.executionMode = ExecutionMode.ALL;
-        this.enabled = true;
     }
 
-    public Action(int sum, boolean enabled, List<String> commands, ExecutionMode executionMode) {
+    public Action(float sum, boolean enabled, int priority, List<String> commands, ExecutionMode executionMode) {
+        if (sum <= 0) throw new IllegalArgumentException("Сумма должна быть положительной");
+        if (priority < 0) throw new IllegalArgumentException("Приоритет не может быть отрицательным");
         this.sum = sum;
         this.enabled = enabled;
+        this.priority = priority;
         this.commands = commands != null ? new ArrayList<>(commands) : new ArrayList<>();
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.ALL;
     }
 
-    public int getSum() {
-        return sum;
-    }
-
-    public void setSum(int sum) {
+    public float getSum() { return sum; }
+    public void setSum(float sum) {
+        if (sum <= 0) throw new IllegalArgumentException("Сумма должна быть положительной");
         this.sum = sum;
     }
 
-    public boolean isEnabled() {
-        return enabled;
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+
+    public int getPriority() { return priority; }
+    public void setPriority(int priority) {
+        if (priority < 0) throw new IllegalArgumentException("Приоритет не может быть отрицательным");
+        this.priority = priority;
     }
 
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public List<String> getCommands() {
-        return commands;
-    }
-
+    public List<String> getCommands() { return commands; }
     public void setCommands(List<String> commands) {
         this.commands = commands != null ? new ArrayList<>(commands) : new ArrayList<>();
     }
 
-    public ExecutionMode getExecutionMode() {
-        return executionMode;
-    }
-
+    public ExecutionMode getExecutionMode() { return executionMode; }
     public void setExecutionMode(ExecutionMode executionMode) {
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.ALL;
     }

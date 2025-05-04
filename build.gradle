@@ -36,6 +36,8 @@ dependencies {
     compile 'com.google.code.gson:gson:2.8.2'
     compile 'org.slf4j:slf4j-api:1.7.30'
     compile 'org.slf4j:slf4j-simple:1.7.30'
+    compile 'io.socket:socket.io-client:1.0.1' // Совместимо с Java 8
+    compile 'org.yaml:snakeyaml:1.33'
 }
 
 processResources {

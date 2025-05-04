@@ -1,20 +1,24 @@
 package com.bogdan3000.dintegrate.config;
 
 import com.bogdan3000.dintegrate.DonateIntegrate;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.util.List;
 
 public class ConfigHandler {
     private static File configFile;
     private static ModConfig cachedConfig;
     private static long lastModified;
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Yaml YAML = new Yaml(new Constructor(ModConfig.class));
 
     public static void register(File file) {
-        configFile = new File(file.getParentFile(), "dintegrate.json");
+        configFile = new File(file.getParentFile(), "dintegrate.yml");
         if (!configFile.exists()) {
             cachedConfig = new ModConfig();
             save();
@@ -26,17 +30,18 @@ public class ConfigHandler {
 
     public static ModConfig load() {
         try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
-            ModConfig config = GSON.fromJson(reader, ModConfig.class);
+            ModConfig config = YAML.loadAs(reader, ModConfig.class);
             if (config == null || !isValid(config)) {
-                DonateIntegrate.LOGGER.warn("Invalid config, creating new default");
+                DonateIntegrate.LOGGER.warn("Некорректная конфигурация, создание стандартной");
                 config = new ModConfig();
             }
             cachedConfig = config;
             lastModified = configFile.lastModified();
-            DonateIntegrate.LOGGER.debug("Loaded config: token={}, userId={}", maskToken(config.getDonpayToken()), config.getUserId());
+            DonateIntegrate.LOGGER.debug("Загружена конфигурация: token={}, userId={}",
+                    maskToken(config.getDonpayToken()), config.getUserId());
             return config;
         } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Failed to load config: {}", e.getMessage(), e);
+            DonateIntegrate.LOGGER.error("Ошибка загрузки конфигурации: {}", e.getMessage());
             cachedConfig = new ModConfig();
             save();
             return cachedConfig;
@@ -45,19 +50,23 @@ public class ConfigHandler {
 
     public static void save() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(configFile))) {
-            GSON.toJson(cachedConfig, writer);
+            YAML.dump(cachedConfig, writer);
             lastModified = configFile.lastModified();
-            DonateIntegrate.LOGGER.debug("Saved config: token={}, userId={}",
+            DonateIntegrate.LOGGER.debug("Сохранена конфигурация: token={}, userId={}",
                     maskToken(cachedConfig.getDonpayToken()), cachedConfig.getUserId());
         } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Failed to save config: {}", e.getMessage(), e);
+            DonateIntegrate.LOGGER.error("Ошибка сохранения конфигурации: {}", e.getMessage());
         }
     }
 
     public static void checkAndReloadConfig() {
-        if (configFile.lastModified() > lastModified) {
-            DonateIntegrate.LOGGER.info("Configuration file changed, reloading...");
-            load();
+        try {
+            if (configFile.lastModified() > lastModified) {
+                DonateIntegrate.LOGGER.info("Конфигурация изменена, перезагрузка...");
+                load();
+            }
+        } catch (Exception e) {
+            DonateIntegrate.LOGGER.error("Ошибка проверки конфигурации: {}", e.getMessage());
         }
     }
 
@@ -69,32 +78,49 @@ public class ConfigHandler {
     }
 
     private static boolean isValid(ModConfig config) {
-        List<Action> actions = config.getActions();
-        if (actions == null || actions.isEmpty()) {
-            DonateIntegrate.LOGGER.warn("No actions configured");
-            return false;
-        }
-        for (Action action : actions) {
-            if (action.getSum() <= 0) {
-                DonateIntegrate.LOGGER.warn("Invalid action sum: {}", action.getSum());
+        try {
+            List<Action> actions = config.getActions();
+            if (actions == null || actions.isEmpty()) {
+                DonateIntegrate.LOGGER.warn("Действия не настроены");
                 return false;
             }
-            if (action.getCommands().isEmpty()) {
-                DonateIntegrate.LOGGER.warn("Action has no commands for sum: {}", action.getSum());
-                return false;
-            }
-            for (String command : action.getCommands()) {
-                if (command == null || command.trim().isEmpty()) {
-                    DonateIntegrate.LOGGER.warn("Invalid command in action for sum: {}", action.getSum());
+            for (Action action : actions) {
+                if (action.getSum() <= 0) {
+                    DonateIntegrate.LOGGER.warn("Некорректная сумма: {}", action.getSum());
+                    return false;
+                }
+                if (action.getCommands().isEmpty()) {
+                    DonateIntegrate.LOGGER.warn("Нет команд для суммы: {}", action.getSum());
+                    return false;
+                }
+                for (String command : action.getCommands()) {
+                    if (command == null || command.trim().isEmpty()) {
+                        DonateIntegrate.LOGGER.warn("Некорректная команда для суммы: {}", action.getSum());
+                        return false;
+                    }
+                }
+                if (action.getPriority() < 0) {
+                    DonateIntegrate.LOGGER.warn("Некорректный приоритет для суммы: {}", action.getSum());
                     return false;
                 }
             }
+            if (config.getDonpayToken() == null || config.getDonpayToken().isEmpty()) {
+                DonateIntegrate.LOGGER.warn("Токен DonatePay не установлен");
+                return false;
+            }
+            if (config.getUserId() == null || config.getUserId().isEmpty()) {
+                DonateIntegrate.LOGGER.warn("User ID не установлен");
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            DonateIntegrate.LOGGER.error("Ошибка валидации конфигурации: {}", e.getMessage());
+            return false;
         }
-        return true;
     }
 
     private static String maskToken(String token) {
-        if (token == null || token.length() <= 10) return token;
+        if (token == null || token.length() <= 10) return token != null ? token : "<null>";
         return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
     }
 }

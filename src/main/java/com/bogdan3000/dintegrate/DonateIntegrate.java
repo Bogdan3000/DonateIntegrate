@@ -2,18 +2,11 @@ package com.bogdan3000.dintegrate;
 
 import com.bogdan3000.dintegrate.command.DPICommand;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
-import com.bogdan3000.dintegrate.donatepay.DonatePayApiClient;
-import com.bogdan3000.dintegrate.donatepay.DonatePayWebSocketHandler;
+import com.bogdan3000.dintegrate.donation.DonationProvider;
+import com.bogdan3000.dintegrate.donation.DonatePayProvider;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.EntityPlayerSP;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.TextComponentString;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.common.Mod.EventHandler;
-import net.minecraftforge.fml.common.Mod.Instance;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
@@ -23,86 +16,145 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
-@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "1.3.1")
+@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "2.0.0")
 public class DonateIntegrate {
     public static final String MOD_ID = "dintegrate";
     public static final String NAME = "DonateIntegrate";
     public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
-    public static List<CommandToExecute> commands = new ArrayList<>();
-    @Instance
-    public static DonateIntegrate instance;
 
-    private static DonatePayWebSocketHandler wsHandler;
+    private static final ConcurrentLinkedQueue<CommandToExecute> commands = new ConcurrentLinkedQueue<>();
+    private static final long COMMAND_COOLDOWN_MS = 1000; // 1 секунда между командами
+
+    private static DonationProvider donationProvider;
     private static ExecutorService commandExecutor;
+    private static long lastCommandTime = 0;
+    private static DonateIntegrate instance;
 
     public static class CommandToExecute {
         public final String command;
         public final String playerName;
+        public final int priority;
 
-        public CommandToExecute(String command, String playerName) {
+        public CommandToExecute(String command, String playerName, int priority) {
+            if (command == null || command.trim().isEmpty()) {
+                throw new IllegalArgumentException("Команда не может быть пустой");
+            }
+            if (playerName == null) {
+                throw new IllegalArgumentException("Имя игрока не может быть null");
+            }
             this.command = command;
             this.playerName = playerName;
+            this.priority = priority;
         }
     }
 
-    @EventHandler
+    @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
-        LOGGER.info("DonateIntegrate initializing");
+        LOGGER.info("Инициализация DonateIntegrate");
+        instance = this;
         ConfigHandler.register(event.getSuggestedConfigurationFile());
     }
 
-    @EventHandler
+    public static DonateIntegrate getInstance() {
+        return instance;
+    }
+
+    @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
-        LOGGER.info("Registering server tick handler");
+        LOGGER.info("Регистрация обработчика тиков сервера");
         MinecraftForge.EVENT_BUS.register(new ServerTickHandler());
         commandExecutor = Executors.newFixedThreadPool(2);
+        initializeDonationProvider();
     }
 
-    @EventHandler
+    @Mod.EventHandler
     public void serverStarting(FMLServerStartingEvent event) {
-        LOGGER.info("Registering /dpi command");
+        LOGGER.info("Регистрация команды /dpi");
         event.registerServerCommand(new DPICommand());
-        forceLoadSlf4j();
-        startWebSocketHandler();
+        startDonationProvider();
     }
 
-    @EventHandler
+    @Mod.EventHandler
     public void serverStopping(FMLServerStoppingEvent event) {
-        LOGGER.info("Shutting down DonateIntegrate");
-        stopWebSocketHandler();
+        LOGGER.info("Остановка DonateIntegrate");
+        stopDonationProvider();
         if (commandExecutor != null) {
             commandExecutor.shutdown();
+            try {
+                if (!commandExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    commandExecutor.shutdownNow();
+                    LOGGER.warn("Принудительная остановка пула команд");
+                }
+            } catch (InterruptedException e) {
+                LOGGER.error("Ошибка при остановке пула команд: {}", e.getMessage());
+                commandExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
-    private void forceLoadSlf4j() {
+    private void initializeDonationProvider() {
+        donationProvider = new DonatePayProvider();
+        donationProvider.onDonation(event -> {
+            try {
+                LOGGER.info("Донат: {} пожертвовал {}, сообщение: {}, ID: {}",
+                        event.username(), event.amount(), event.message(), event.id());
+                ConfigHandler.getConfig().getActions().stream()
+                        .filter(action -> Math.abs(action.getSum() - event.amount()) < 0.001 && action.isEnabled())
+                        .findFirst()
+                        .ifPresent(action -> {
+                            List<String> commandsToExecute = action.getExecutionMode() == com.bogdan3000.dintegrate.config.Action.ExecutionMode.ALL
+                                    ? action.getCommands()
+                                    : java.util.Collections.singletonList(
+                                    action.getCommands().get(new java.util.Random().nextInt(action.getCommands().size())));
+                            for (String cmd : commandsToExecute) {
+                                String command = cmd.replace("{username}", event.username())
+                                        .replace("{message}", event.message())
+                                        .replace("{amount}", String.valueOf(event.amount()));
+                                addCommand(new CommandToExecute(command, event.username(), action.getPriority()));
+                            }
+                            ConfigHandler.getConfig().setLastDonate(event.id());
+                            ConfigHandler.save();
+                            LOGGER.info("Обработан донат #{}: добавлено {} команд", event.id(), commandsToExecute.size());
+                        });
+            } catch (Exception e) {
+                LOGGER.error("Ошибка обработки доната #{}: {}", event.id(), e.getMessage());
+            }
+        });
+    }
+
+    public static void startDonationProvider() {
         try {
-            // Заставляем загрузиться LoggerFactory
-            Class.forName("org.slf4j.LoggerFactory", true, getClass().getClassLoader());
-            System.out.println("[DonateIntegrate] SLF4J LoggerFactory force-loaded successfully.");
+            if (ConfigHandler.getConfig().isEnabled()) {
+                donationProvider.connect();
+            } else {
+                LOGGER.warn("Обработка донатов отключена");
+            }
         } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("[DonateIntegrate] Failed to force-load SLF4J.");
+            LOGGER.error("Ошибка запуска провайдера донатов: {}", e.getMessage());
         }
     }
 
-    public static void startWebSocketHandler() {
-        stopWebSocketHandler();
-        LOGGER.info("Starting WebSocket handler");
-        wsHandler = new DonatePayWebSocketHandler(new DonatePayApiClient());
-        new Thread(wsHandler::start, "WebSocketThread").start();
+    public static void stopDonationProvider() {
+        try {
+            donationProvider.disconnect();
+        } catch (Exception e) {
+            LOGGER.error("Ошибка остановки провайдера донатов: {}", e.getMessage());
+        }
     }
 
-    public static void stopWebSocketHandler() {
-        if (wsHandler != null) {
-            LOGGER.info("Stopping WebSocket handler");
-            wsHandler.stop();
-            wsHandler = null;
+    public static void addCommand(CommandToExecute command) {
+        try {
+            commands.add(command);
+            LOGGER.debug("Добавлена команда в очередь: {}", command.command);
+        } catch (Exception e) {
+            LOGGER.error("Ошибка добавления команды: {}", e.getMessage());
         }
     }
 
@@ -114,33 +166,53 @@ public class DonateIntegrate {
             if (event.phase != TickEvent.Phase.END) return;
 
             tickCounter++;
-            if (tickCounter % 6000 == 0) {
-                if (wsHandler == null) {
-                    LOGGER.info("WebSocket handler not running, restarting");
-                    startWebSocketHandler();
+            if (tickCounter % 6000 == 0) { // Каждые 5 минут
+                try {
+                    if (!ConfigHandler.getConfig().isEnabled()) {
+                        LOGGER.info("Провайдер донатов отключен");
+                        stopDonationProvider();
+                    } else if (!donationProvider.isConnected()) {
+                        LOGGER.info("Переподключение провайдера донатов");
+                        startDonationProvider();
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Ошибка проверки подключения: {}", e.getMessage());
                 }
             }
 
-            if (tickCounter % 100 == 0) {
-                ConfigHandler.checkAndReloadConfig();
+            if (tickCounter % 100 == 0) { // Каждые 5 секунд
+                try {
+                    ConfigHandler.checkAndReloadConfig();
+                } catch (Exception e) {
+                    LOGGER.error("Ошибка перезагрузки конфигурации: {}", e.getMessage());
+                }
             }
 
-            if (tickCounter % 10 == 0 && !commands.isEmpty()) {
-                CommandToExecute cmd = commands.remove(0);
-                commandExecutor.submit(() -> {
-                    Minecraft mc = Minecraft.getMinecraft();
-                    if (mc.player != null) {
-                        mc.addScheduledTask(() -> {
-                            if (cmd.command.startsWith("/")) {
-                                mc.player.sendChatMessage(cmd.command);
-                                LOGGER.debug("Sent command as {}: {}", cmd.playerName, cmd.command);
+            if (tickCounter % 10 == 0 && !commands.isEmpty()) { // Каждые 0.5 секунды
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastCommandTime < COMMAND_COOLDOWN_MS) {
+                    return;
+                }
+
+                CommandToExecute cmd = commands.poll();
+                if (cmd != null) {
+                    lastCommandTime = currentTime;
+                    commandExecutor.submit(() -> {
+                        try {
+                            Minecraft mc = Minecraft.getMinecraft();
+                            if (mc.player != null) {
+                                mc.addScheduledTask(() -> {
+                                    mc.player.sendChatMessage(cmd.command);
+                                    LOGGER.debug("Выполнена команда от {}: {}", cmd.playerName, cmd.command);
+                                });
                             } else {
-                                mc.player.sendChatMessage(cmd.command);
-                                LOGGER.debug("Sent message as {}: {}", cmd.playerName, cmd.command);
+                                LOGGER.warn("Игрок недоступен для команды: {}", cmd.command);
                             }
-                        });
-                    }
-                });
+                        } catch (Exception e) {
+                            LOGGER.error("Ошибка выполнения команды '{}': {}", cmd.command, e.getMessage());
+                        }
+                    });
+                }
             }
         }
     }
