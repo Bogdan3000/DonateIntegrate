@@ -67,6 +67,7 @@ public class DonateIntegrate {
     public void serverStarting(FMLServerStartingEvent event) {
         LOGGER.info("Registering /dpi command");
         event.registerServerCommand(new DPICommand());
+        forceLoadSlf4j();
         startWebSocketHandler();
     }
 
@@ -76,6 +77,17 @@ public class DonateIntegrate {
         stopWebSocketHandler();
         if (commandExecutor != null) {
             commandExecutor.shutdown();
+        }
+    }
+
+    private void forceLoadSlf4j() {
+        try {
+            // Заставляем загрузиться LoggerFactory
+            Class.forName("org.slf4j.LoggerFactory", true, getClass().getClassLoader());
+            System.out.println("[DonateIntegrate] SLF4J LoggerFactory force-loaded successfully.");
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.err.println("[DonateIntegrate] Failed to force-load SLF4J.");
         }
     }
 
