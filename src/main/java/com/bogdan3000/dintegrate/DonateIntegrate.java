@@ -132,7 +132,9 @@ public class DonateIntegrate {
     public static void startDonationProvider() {
         try {
             if (ConfigHandler.getConfig().isEnabled()) {
+                stopDonationProvider(); // Закрываем старое соединение перед новым
                 donationProvider.connect();
+                LOGGER.info("Попытка запуска провайдера донатов");
             } else {
                 LOGGER.warn("Обработка донатов отключена");
             }
@@ -144,6 +146,7 @@ public class DonateIntegrate {
     public static void stopDonationProvider() {
         try {
             donationProvider.disconnect();
+            LOGGER.info("Провайдер донатов остановлен");
         } catch (Exception e) {
             LOGGER.error("Ошибка остановки провайдера донатов: {}", e.getMessage());
         }

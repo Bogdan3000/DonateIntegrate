@@ -3,14 +3,21 @@ package com.bogdan3000.dintegrate.donation;
 import com.bogdan3000.dintegrate.DonateIntegrate;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import io.socket.client.IO;
-import io.socket.client.Socket;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 public class DonatePayProvider implements DonationProvider {
@@ -18,88 +25,89 @@ public class DonatePayProvider implements DonationProvider {
     private static final String API_URL = "https://donatepay.ru/api/v2/socket/token";
     private static final Gson GSON = new Gson();
 
-    private Socket socket;
+    private WebSocketClient socket;
     private Consumer<DonationEvent> donationHandler;
     private boolean isConnected;
     private String clientId;
-    private int messageId = 3;
+    private final AtomicInteger messageId = new AtomicInteger(3);
+    private ScheduledExecutorService pingScheduler;
 
     @Override
     public void connect() {
         try {
+            // Проверяем, есть ли уже активное соединение
+            if (isConnected && socket != null && socket.isOpen()) {
+                DonateIntegrate.LOGGER.info("WebSocket уже подключен, пропускаем повторное подключение");
+                return;
+            }
+
+            // Закрываем старое соединение, если оно существует
+            disconnect();
+
             String token = ConfigHandler.getConfig().getDonpayToken();
             String userId = ConfigHandler.getConfig().getUserId();
             if (token == null || token.isEmpty() || userId == null || userId.isEmpty()) {
-                DonateIntegrate.LOGGER.error("Токен или User ID не установлены");
+                DonateIntegrate.LOGGER.error("Token or User ID not set");
                 return;
             }
 
             String connectionToken = getConnectionToken(token);
             if (connectionToken == null) {
-                DonateIntegrate.LOGGER.error("Не удалось получить токен подключения");
+                DonateIntegrate.LOGGER.error("Failed to obtain connection token");
                 return;
             }
 
-            IO.Options options = new IO.Options();
-            options.forceNew = true;
-            options.reconnection = true;
-            options.reconnectionAttempts = 5;
-            options.reconnectionDelay = 1000;
-            options.query = "token=" + connectionToken;
+            URI serverUri = new URI(WS_URL);
+            Map<String, String> headers = new HashMap<>();
+            headers.put("User-Agent", "Minecraft-DonateIntegrate/2.0.0");
 
-            socket = IO.socket(WS_URL, options);
-
-            socket.on(Socket.EVENT_CONNECT, args -> {
-                isConnected = true;
-                DonateIntegrate.LOGGER.info("Подключено к DonatePay WebSocket");
-                sendHandshake(connectionToken);
-            });
-
-            socket.on("message", args -> {
-                try {
-                    String message = args[0].toString();
-                    JsonObject jsonMsg = GSON.fromJson(message, JsonObject.class);
-                    handleMessage(jsonMsg);
-                } catch (Exception e) {
-                    DonateIntegrate.LOGGER.error("Ошибка обработки сообщения: {}", e.getMessage());
-                }
-            });
-
-            socket.on(Socket.EVENT_DISCONNECT, args -> {
-                isConnected = false;
-                DonateIntegrate.LOGGER.warn("Отключено от DonatePay: {}", args[0]);
-            });
-
-            socket.on(Socket.EVENT_CONNECT_ERROR, args -> {
-                isConnected = false;
-                DonateIntegrate.LOGGER.error("Ошибка подключения к DonatePay: {}", args[0]);
-            });
-
+            socket = new DonatePayWebSocket(serverUri, token, connectionToken, headers);
+            socket.setConnectionLostTimeout(30);
             socket.connect();
+
+            int connectionTimeout = 0;
+            while (!socket.isOpen() && connectionTimeout < 30) {
+                Thread.sleep(1000);
+                connectionTimeout++;
+            }
+
+            if (!socket.isOpen()) {
+                DonateIntegrate.LOGGER.error("WebSocket connection timeout");
+                return;
+            }
+
+            isConnected = true;
             startPingScheduler();
+            DonateIntegrate.LOGGER.info("Connected to DonatePay WebSocket");
         } catch (Exception e) {
             isConnected = false;
-            DonateIntegrate.LOGGER.error("Ошибка подключения к DonatePay: {}", e.getMessage());
+            DonateIntegrate.LOGGER.error("Error connecting to DonatePay: {}", e.getMessage());
         }
     }
 
     @Override
     public void disconnect() {
         try {
+            isConnected = false;
+            if (pingScheduler != null) {
+                pingScheduler.shutdown();
+                pingScheduler = null;
+            }
             if (socket != null) {
-                socket.disconnect();
+                if (socket.isOpen()) {
+                    socket.close();
+                }
                 socket = null;
-                isConnected = false;
-                DonateIntegrate.LOGGER.info("Отключено от DonatePay");
+                DonateIntegrate.LOGGER.info("Disconnected from DonatePay");
             }
         } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка отключения от DonatePay: {}", e.getMessage());
+            DonateIntegrate.LOGGER.error("Error disconnecting from DonatePay: {}", e.getMessage());
         }
     }
 
     @Override
     public boolean isConnected() {
-        return isConnected;
+        return isConnected && socket != null && socket.isOpen();
     }
 
     @Override
@@ -125,7 +133,7 @@ public class DonatePayProvider implements DonationProvider {
             }
 
             if (conn.getResponseCode() != 200) {
-                DonateIntegrate.LOGGER.error("Ошибка получения токена, код HTTP: {}", conn.getResponseCode());
+                DonateIntegrate.LOGGER.error("Failed to get token, HTTP code: {}", conn.getResponseCode());
                 return null;
             }
 
@@ -140,215 +148,255 @@ public class DonatePayProvider implements DonationProvider {
                 return jsonResponse.get("token").getAsString();
             }
         } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка получения токена подключения: {}", e.getMessage());
+            DonateIntegrate.LOGGER.error("Error getting connection token: {}", e.getMessage());
             return null;
-        }
-    }
-
-    private void sendHandshake(String connectionToken) {
-        try {
-            JsonObject handshakeMsg = new JsonObject();
-            JsonObject params = new JsonObject();
-            params.addProperty("token", connectionToken);
-            params.addProperty("name", "java");
-            handshakeMsg.add("params", params);
-            handshakeMsg.addProperty("id", 1);
-            socket.emit("message", GSON.toJson(handshakeMsg));
-            DonateIntegrate.LOGGER.debug("Отправлен handshake: {}", handshakeMsg);
-        } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка отправки handshake: {}", e.getMessage());
-        }
-    }
-
-    private void handleMessage(JsonObject jsonMsg) {
-        try {
-            if (jsonMsg.has("error")) {
-                DonateIntegrate.LOGGER.error("Ошибка сервера: {}", jsonMsg.get("error"));
-                return;
-            }
-
-            if (jsonMsg.has("id") && jsonMsg.get("id").getAsInt() == 1) {
-                handleHandshakeResponse(jsonMsg);
-            } else if (jsonMsg.has("id") && jsonMsg.get("id").getAsInt() == 2) {
-                handleSubscriptionResponse(jsonMsg);
-            } else if (jsonMsg.has("id") && jsonMsg.get("id").getAsInt() >= 3) {
-                handlePingResponse(jsonMsg);
-            } else if (jsonMsg.has("result")) {
-                handlePushNotification(jsonMsg);
-            }
-        } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка обработки сообщения: {}", e.getMessage());
-        }
-    }
-
-    private void handleHandshakeResponse(JsonObject jsonMsg) {
-        try {
-            if (!jsonMsg.has("result")) {
-                DonateIntegrate.LOGGER.error("Ошибка handshake: {}", jsonMsg);
-                return;
-            }
-
-            JsonObject result = jsonMsg.getAsJsonObject("result");
-            if (!result.has("client")) {
-                DonateIntegrate.LOGGER.error("Отсутствует client ID: {}", jsonMsg);
-                return;
-            }
-
-            clientId = result.get("client").getAsString();
-            DonateIntegrate.LOGGER.info("Получен client ID: {}", clientId);
-
-            String channel = "$public:" + ConfigHandler.getConfig().getUserId();
-            String channelToken = getChannelToken(ConfigHandler.getConfig().getDonpayToken(), clientId, channel);
-            if (channelToken == null) {
-                DonateIntegrate.LOGGER.error("Не удалось получить токен канала");
-                return;
-            }
-
-            JsonObject subscribeMsg = new JsonObject();
-            subscribeMsg.addProperty("id", 2);
-            subscribeMsg.addProperty("method", 1);
-            JsonObject params = new JsonObject();
-            params.addProperty("channel", channel);
-            params.addProperty("token", channelToken);
-            subscribeMsg.add("params", params);
-
-            socket.emit("message", GSON.toJson(subscribeMsg));
-            DonateIntegrate.LOGGER.debug("Отправлена подписка: {}", subscribeMsg);
-        } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка обработки handshake: {}", e.getMessage());
-        }
-    }
-
-    private String getChannelToken(String accessToken, String clientId, String channel) {
-        try {
-            JsonObject payload = new JsonObject();
-            payload.addProperty("client", clientId);
-            com.google.gson.JsonArray channels = new com.google.gson.JsonArray();
-            channels.add(channel);
-            payload.add("channels", channels);
-
-            URL url = new URL(API_URL + "?access_token=" + accessToken);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.0");
-            conn.setDoOutput(true);
-
-            try (java.io.OutputStream os = conn.getOutputStream()) {
-                byte[] input = GSON.toJson(payload).getBytes(StandardCharsets.UTF_8);
-                os.write(input, 0, input.length);
-            }
-
-            if (conn.getResponseCode() != 200) {
-                DonateIntegrate.LOGGER.error("Ошибка получения токена канала, код HTTP: {}", conn.getResponseCode());
-                return null;
-            }
-
-            try (java.io.BufferedReader br = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) {
-                    response.append(line);
-                }
-                JsonObject jsonResponse = GSON.fromJson(response.toString(), JsonObject.class);
-                com.google.gson.JsonArray channelsArray = jsonResponse.getAsJsonArray("channels");
-                for (int i = 0; i < channelsArray.size(); i++) {
-                    JsonObject channelObj = channelsArray.get(i).getAsJsonObject();
-                    if (channelObj.get("channel").getAsString().equals(channel)) {
-                        return channelObj.get("token").getAsString();
-                    }
-                }
-                return null;
-            }
-        } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка получения токена канала: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private void handleSubscriptionResponse(JsonObject jsonMsg) {
-        try {
-            if (jsonMsg.has("result")) {
-                DonateIntegrate.LOGGER.info("Успешно подписан на канал донатов");
-            } else if (jsonMsg.has("error")) {
-                DonateIntegrate.LOGGER.error("Ошибка подписки: {}", jsonMsg.get("error"));
-            }
-        } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка обработки ответа подписки: {}", e.getMessage());
-        }
-    }
-
-    private void handlePingResponse(JsonObject jsonMsg) {
-        try {
-            if (jsonMsg.has("result")) {
-                DonateIntegrate.LOGGER.debug("Получен ответ на пинг: {}", jsonMsg);
-            } else if (jsonMsg.has("error")) {
-                DonateIntegrate.LOGGER.error("Ошибка пинга: {}", jsonMsg.get("error"));
-            }
-        } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка обработки пинга: {}", e.getMessage());
-        }
-    }
-
-    private void handlePushNotification(JsonObject jsonMsg) {
-        try {
-            JsonObject result = jsonMsg.getAsJsonObject("result");
-            if (!result.has("channel") || !result.has("data")) {
-                DonateIntegrate.LOGGER.warn("Некорректный формат уведомления: {}", result);
-                return;
-            }
-
-            JsonObject data = result.getAsJsonObject("data");
-            if (!data.has("data") || !data.getAsJsonObject("data").has("notification")) {
-                DonateIntegrate.LOGGER.warn("Отсутствует уведомление: {}", data);
-                return;
-            }
-
-            JsonObject notification = data.getAsJsonObject("data").getAsJsonObject("notification");
-            if (!notification.has("id") || !notification.has("vars")) {
-                DonateIntegrate.LOGGER.warn("Некорректное уведомление: {}", notification);
-                return;
-            }
-
-            JsonObject vars = notification.getAsJsonObject("vars");
-            if (!vars.has("sum") || !vars.has("name")) {
-                DonateIntegrate.LOGGER.warn("Отсутствуют переменные доната: {}", vars);
-                return;
-            }
-
-            int id = notification.get("id").getAsInt();
-            float sum = vars.get("sum").getAsFloat();
-            String username = vars.get("name").getAsString();
-            String comment = vars.has("comment") ? vars.get("comment").getAsString() : "";
-
-            if (id <= ConfigHandler.getConfig().getLastDonate()) {
-                DonateIntegrate.LOGGER.info("Пропущен обработанный донат #{}", id);
-                return;
-            }
-
-            if (donationHandler != null) {
-                donationHandler.accept(new DonationEvent(username, sum, comment, id));
-            }
-        } catch (Exception e) {
-            DonateIntegrate.LOGGER.error("Ошибка обработки уведомления: {}", e.getMessage());
         }
     }
 
     private void startPingScheduler() {
-        Executors.newScheduledThreadPool(1).scheduleAtFixedRate(() -> {
+        pingScheduler = Executors.newScheduledThreadPool(1);
+        pingScheduler.scheduleAtFixedRate(() -> {
             try {
-                if (isConnected && socket != null) {
+                if (isConnected && socket != null && socket.isOpen()) {
                     JsonObject pingMsg = new JsonObject();
-                    pingMsg.addProperty("id", messageId++);
+                    pingMsg.addProperty("id", messageId.getAndIncrement());
                     pingMsg.addProperty("method", 7);
-                    socket.emit("message", GSON.toJson(pingMsg));
-                    DonateIntegrate.LOGGER.debug("Отправлен пинг: {}", pingMsg);
+                    socket.send(GSON.toJson(pingMsg));
+                    DonateIntegrate.LOGGER.debug("Sent ping: {}", pingMsg);
                 }
             } catch (Exception e) {
-                DonateIntegrate.LOGGER.error("Ошибка отправки пинга: {}", e.getMessage());
+                DonateIntegrate.LOGGER.error("Error sending ping: {}", e.getMessage());
             }
-        }, 0, 15, java.util.concurrent.TimeUnit.SECONDS);
+        }, 0, 15, TimeUnit.SECONDS);
+    }
+
+    private class DonatePayWebSocket extends WebSocketClient {
+        private final String accessToken;
+        private final String connectionToken;
+
+        public DonatePayWebSocket(URI serverUri, String accessToken, String connectionToken, Map<String, String> headers) {
+            super(serverUri, headers);
+            this.accessToken = accessToken;
+            this.connectionToken = connectionToken;
+        }
+
+        @Override
+        public void onOpen(ServerHandshake handshake) {
+            DonateIntegrate.LOGGER.info("WebSocket connection opened");
+            sendHandshake();
+        }
+
+        @Override
+        public void onMessage(String message) {
+            try {
+                JsonObject jsonMsg = GSON.fromJson(message, JsonObject.class);
+                handleMessage(jsonMsg);
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error processing message: {}", e.getMessage());
+            }
+        }
+
+        @Override
+        public void onClose(int code, String reason, boolean remote) {
+            isConnected = false;
+            DonateIntegrate.LOGGER.warn("WebSocket closed: {} (code: {})", reason, code);
+        }
+
+        @Override
+        public void onError(Exception ex) {
+            isConnected = false;
+            DonateIntegrate.LOGGER.error("WebSocket error: {}", ex.getMessage());
+        }
+
+        private void sendHandshake() {
+            try {
+                JsonObject handshakeMsg = new JsonObject();
+                JsonObject params = new JsonObject();
+                params.addProperty("token", connectionToken);
+                params.addProperty("name", "java");
+                handshakeMsg.add("params", params);
+                handshakeMsg.addProperty("id", 1);
+                send(GSON.toJson(handshakeMsg));
+                DonateIntegrate.LOGGER.debug("Sent handshake: {}", handshakeMsg);
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error sending handshake: {}", e.getMessage());
+            }
+        }
+
+        private void handleMessage(JsonObject jsonMsg) {
+            try {
+                if (jsonMsg.has("error")) {
+                    DonateIntegrate.LOGGER.error("Server error: {}", jsonMsg.get("error"));
+                    return;
+                }
+
+                if (jsonMsg.has("id") && jsonMsg.get("id").getAsInt() == 1) {
+                    handleHandshakeResponse(jsonMsg);
+                } else if (jsonMsg.has("id") && jsonMsg.get("id").getAsInt() == 2) {
+                    handleSubscriptionResponse(jsonMsg);
+                } else if (jsonMsg.has("id") && jsonMsg.get("id").getAsInt() >= 3) {
+                    handlePingResponse(jsonMsg);
+                } else if (jsonMsg.has("result")) {
+                    handlePushNotification(jsonMsg);
+                }
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error processing message: {}", e.getMessage());
+            }
+        }
+
+        private void handleHandshakeResponse(JsonObject jsonMsg) {
+            try {
+                if (!jsonMsg.has("result")) {
+                    DonateIntegrate.LOGGER.error("Handshake failed: {}", jsonMsg);
+                    return;
+                }
+
+                JsonObject result = jsonMsg.getAsJsonObject("result");
+                if (!result.has("client")) {
+                    DonateIntegrate.LOGGER.error("No client ID: {}", jsonMsg);
+                    return;
+                }
+
+                clientId = result.get("client").getAsString();
+                DonateIntegrate.LOGGER.info("Received client ID: {}", clientId);
+
+                String channel = "$public:" + ConfigHandler.getConfig().getUserId();
+                String channelToken = getChannelToken(accessToken, clientId, channel);
+                if (channelToken == null) {
+                    DonateIntegrate.LOGGER.error("Failed to obtain channel token");
+                    return;
+                }
+
+                JsonObject subscribeMsg = new JsonObject();
+                subscribeMsg.addProperty("id", 2);
+                subscribeMsg.addProperty("method", 1);
+                JsonObject params = new JsonObject();
+                params.addProperty("channel", channel);
+                params.addProperty("token", channelToken);
+                subscribeMsg.add("params", params);
+
+                send(GSON.toJson(subscribeMsg));
+                DonateIntegrate.LOGGER.debug("Sent subscription: {}", subscribeMsg);
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error processing handshake: {}", e.getMessage());
+            }
+        }
+
+        private String getChannelToken(String accessToken, String clientId, String channel) {
+            try {
+                JsonObject payload = new JsonObject();
+                payload.addProperty("client", clientId);
+                JsonArray channels = new JsonArray();
+                channels.add(channel);
+                payload.add("channels", channels);
+
+                URL url = new URL(API_URL + "?access_token=" + accessToken);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.0");
+                conn.setDoOutput(true);
+
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    byte[] input = GSON.toJson(payload).getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                if (conn.getResponseCode() != 200) {
+                    DonateIntegrate.LOGGER.error("Failed to get channel token, HTTP code: {}", conn.getResponseCode());
+                    return null;
+                }
+
+                try (java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        response.append(line);
+                    }
+                    JsonObject jsonResponse = GSON.fromJson(response.toString(), JsonObject.class);
+                    JsonArray channelsArray = jsonResponse.getAsJsonArray("channels");
+                    for (int i = 0; i < channelsArray.size(); i++) {
+                        JsonObject channelObj = channelsArray.get(i).getAsJsonObject();
+                        if (channelObj.get("channel").getAsString().equals(channel)) {
+                            return channelObj.get("token").getAsString();
+                        }
+                    }
+                    return null;
+                }
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error getting channel token: {}", e.getMessage());
+                return null;
+            }
+        }
+
+        private void handleSubscriptionResponse(JsonObject jsonMsg) {
+            try {
+                if (jsonMsg.has("result")) {
+                    DonateIntegrate.LOGGER.info("Successfully subscribed to donation channel");
+                } else if (jsonMsg.has("error")) {
+                    DonateIntegrate.LOGGER.error("Subscription error: {}", jsonMsg.get("error"));
+                }
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error processing subscription response: {}", e.getMessage());
+            }
+        }
+
+        private void handlePingResponse(JsonObject jsonMsg) {
+            try {
+                if (jsonMsg.has("result")) {
+                    DonateIntegrate.LOGGER.debug("Received ping response: {}", jsonMsg);
+                } else if (jsonMsg.has("error")) {
+                    DonateIntegrate.LOGGER.error("Ping error: {}", jsonMsg.get("error"));
+                }
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error processing ping: {}", e.getMessage());
+            }
+        }
+
+        private void handlePushNotification(JsonObject jsonMsg) {
+            try {
+                JsonObject result = jsonMsg.getAsJsonObject("result");
+                if (!result.has("channel") || !result.has("data")) {
+                    DonateIntegrate.LOGGER.warn("Invalid notification format: {}", result);
+                    return;
+                }
+
+                JsonObject data = result.getAsJsonObject("data");
+                if (!data.has("data") || !data.getAsJsonObject("data").has("notification")) {
+                    DonateIntegrate.LOGGER.warn("Missing notification: {}", data);
+                    return;
+                }
+
+                JsonObject notification = data.getAsJsonObject("data").getAsJsonObject("notification");
+                if (!notification.has("id") || !notification.has("vars")) {
+                    DonateIntegrate.LOGGER.warn("Invalid notification: {}", notification);
+                    return;
+                }
+
+                JsonObject vars = notification.getAsJsonObject("vars");
+                if (!vars.has("sum") || !vars.has("name")) {
+                    DonateIntegrate.LOGGER.warn("Missing donation variables: {}", vars);
+                    return;
+                }
+
+                int id = notification.get("id").getAsInt();
+                float sum = vars.get("sum").getAsFloat();
+                String username = vars.get("name").getAsString();
+                String comment = vars.has("comment") ? vars.get("comment").getAsString() : "";
+
+                if (id <= ConfigHandler.getConfig().getLastDonate()) {
+                    DonateIntegrate.LOGGER.info("Skipped processed donation #{}", id);
+                    return;
+                }
+
+                if (donationHandler != null) {
+                    donationHandler.accept(new DonationEvent(username, sum, comment, id));
+                }
+            } catch (Exception e) {
+                DonateIntegrate.LOGGER.error("Error processing notification: {}", e.getMessage());
+            }
+        }
     }
 }
