@@ -1,6 +1,7 @@
 package com.bogdan3000.dintegrate.command;
 
 import com.bogdan3000.dintegrate.DonateIntegrate;
+import com.bogdan3000.dintegrate.config.Action;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.config.ModConfig;
 import net.minecraft.command.CommandBase;
@@ -23,7 +24,7 @@ public class DPICommand extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/dpi [set_token <token>|set_userid <userId>|enable|disable|status|reload|test <username> <amount> [message]]";
+        return "/dpi [set_token <token>|set_userid <userId>|enable|disable|status|reload|reload_config|test <username> <amount> [message]]";
     }
 
     @Override
@@ -90,6 +91,12 @@ public class DPICommand extends CommandBase {
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "WebSocket handler reloaded"));
                 break;
 
+            case "reload_config":
+                ConfigHandler.load();
+                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Configuration reloaded from file"));
+                DonateIntegrate.LOGGER.info("Configuration reloaded by {}", sender.getName());
+                break;
+
             case "test":
                 if (args.length < 3) {
                     throw new CommandException("Usage: /dpi test <username> <amount> [message]");
@@ -119,6 +126,7 @@ public class DPICommand extends CommandBase {
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi disable " + TextFormatting.GRAY + "- Disable donation processing"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi status " + TextFormatting.GRAY + "- Show configuration status"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi reload " + TextFormatting.GRAY + "- Reload WebSocket connection"));
+        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi reload_config " + TextFormatting.GRAY + "- Reload configuration file"));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi test <username> <amount> [message] " + TextFormatting.GRAY + "- Test a donation"));
     }
 
@@ -138,6 +146,12 @@ public class DPICommand extends CommandBase {
 
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Last donation ID: " + TextFormatting.AQUA + config.getLastDonate()));
         sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Configured actions: " + TextFormatting.AQUA + config.getActions().size()));
+        for (Action action : config.getActions()) {
+            sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "- Sum: " + TextFormatting.AQUA + action.getSum() +
+                    ", Enabled: " + (action.isEnabled() ? TextFormatting.GREEN + "Yes" : TextFormatting.RED + "No") +
+                    ", Mode: " + TextFormatting.AQUA + action.getExecutionMode() +
+                    ", Commands: " + TextFormatting.AQUA + action.getCommands().size()));
+        }
     }
 
     private String maskToken(String token) {
@@ -152,32 +166,20 @@ public class DPICommand extends CommandBase {
         Random random = new Random();
 
         for (com.bogdan3000.dintegrate.config.Action action : config.getActions()) {
-            if (action.getSum() == amount) {
+            if (action.getSum() == amount && action.isEnabled()) {
                 List<String> commandsToExecute = new ArrayList<>();
-                String title = action.getMessage()
-                        .replace("{username}", username)
-                        .replace("{message}", message);
-
                 List<String> availableCommands = action.getCommands();
+                if (availableCommands.isEmpty()) {
+                    sender.sendMessage(new TextComponentString(TextFormatting.RED + "No commands configured for amount: " + amount));
+                    return;
+                }
+
                 switch (action.getExecutionMode()) {
-                    case SEQUENTIAL:
+                    case ALL:
                         commandsToExecute.addAll(availableCommands);
                         break;
                     case RANDOM_ONE:
-                        if (!availableCommands.isEmpty()) {
-                            commandsToExecute.add(availableCommands.get(random.nextInt(availableCommands.size())));
-                        }
-                        break;
-                    case RANDOM_MULTIPLE:
-                        if (!availableCommands.isEmpty()) {
-                            int count = random.nextInt(availableCommands.size()) + 1;
-                            List<String> shuffled = new ArrayList<>(availableCommands);
-                            Collections.shuffle(shuffled, random);
-                            commandsToExecute.addAll(shuffled.subList(0, Math.min(count, shuffled.size())));
-                        }
-                        break;
-                    case ALL:
-                        commandsToExecute.addAll(availableCommands);
+                        commandsToExecute.add(availableCommands.get(random.nextInt(availableCommands.size())));
                         break;
                 }
 
@@ -186,20 +188,17 @@ public class DPICommand extends CommandBase {
                     DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute(command, username));
                 }
 
-                if (!title.isEmpty()) {
-                    DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute("title @a title \"" + title + "\"", username));
-                }
-
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Test donation triggered: " +
                         TextFormatting.YELLOW + username + TextFormatting.GREEN + " donated " +
-                        TextFormatting.GOLD + amount + ", executed " + commandsToExecute.size() + " commands"));
+                        TextFormatting.GOLD + amount + ", message: " + TextFormatting.AQUA + message +
+                        ", executed " + commandsToExecute.size() + " commands"));
                 actionFound = true;
                 break;
             }
         }
 
         if (!actionFound) {
-            sender.sendMessage(new TextComponentString(TextFormatting.RED + "No action configured for amount: " + amount));
+            sender.sendMessage(new TextComponentString(TextFormatting.RED + "No enabled action configured for amount: " + amount));
         }
     }
 

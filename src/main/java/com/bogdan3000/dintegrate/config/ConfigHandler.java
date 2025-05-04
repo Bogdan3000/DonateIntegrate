@@ -10,6 +10,7 @@ import java.util.List;
 public class ConfigHandler {
     private static File configFile;
     private static ModConfig cachedConfig;
+    private static long lastModified;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static void register(File file) {
@@ -20,6 +21,7 @@ public class ConfigHandler {
         } else {
             load();
         }
+        lastModified = configFile.lastModified();
     }
 
     public static ModConfig load() {
@@ -30,6 +32,7 @@ public class ConfigHandler {
                 config = new ModConfig();
             }
             cachedConfig = config;
+            lastModified = configFile.lastModified();
             DonateIntegrate.LOGGER.debug("Loaded config: token={}, userId={}", maskToken(config.getDonpayToken()), config.getUserId());
             return config;
         } catch (Exception e) {
@@ -43,10 +46,18 @@ public class ConfigHandler {
     public static void save() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(configFile))) {
             GSON.toJson(cachedConfig, writer);
+            lastModified = configFile.lastModified();
             DonateIntegrate.LOGGER.debug("Saved config: token={}, userId={}",
                     maskToken(cachedConfig.getDonpayToken()), cachedConfig.getUserId());
         } catch (Exception e) {
             DonateIntegrate.LOGGER.error("Failed to save config: {}", e.getMessage(), e);
+        }
+    }
+
+    public static void checkAndReloadConfig() {
+        if (configFile.lastModified() > lastModified) {
+            DonateIntegrate.LOGGER.info("Configuration file changed, reloading...");
+            load();
         }
     }
 

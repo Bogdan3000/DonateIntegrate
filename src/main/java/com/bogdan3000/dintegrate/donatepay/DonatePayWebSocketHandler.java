@@ -277,33 +277,21 @@ public class DonatePayWebSocketHandler {
             boolean actionFound = false;
             Random random = new Random();
             for (com.bogdan3000.dintegrate.config.Action action : config.getActions()) {
-                if (Math.abs((float) action.getSum() - sum) < 0.001) {
+                if (Math.abs((float) action.getSum() - sum) < 0.001 && action.isEnabled()) {
                     actionFound = true;
                     List<String> commandsToExecute = new ArrayList<>();
-                    String title = action.getMessage()
-                            .replace("{username}", username)
-                            .replace("{message}", comment);
-
                     List<String> availableCommands = action.getCommands();
+                    if (availableCommands.isEmpty()) {
+                        DonateIntegrate.LOGGER.warn("No commands configured for sum: {}", sum);
+                        break;
+                    }
+
                     switch (action.getExecutionMode()) {
-                        case SEQUENTIAL:
+                        case ALL:
                             commandsToExecute.addAll(availableCommands);
                             break;
                         case RANDOM_ONE:
-                            if (!availableCommands.isEmpty()) {
-                                commandsToExecute.add(availableCommands.get(random.nextInt(availableCommands.size())));
-                            }
-                            break;
-                        case RANDOM_MULTIPLE:
-                            if (!availableCommands.isEmpty()) {
-                                int count = random.nextInt(availableCommands.size()) + 1;
-                                List<String> shuffled = new ArrayList<>(availableCommands);
-                                Collections.shuffle(shuffled, random);
-                                commandsToExecute.addAll(shuffled.subList(0, Math.min(count, shuffled.size())));
-                            }
-                            break;
-                        case ALL:
-                            commandsToExecute.addAll(availableCommands);
+                            commandsToExecute.add(availableCommands.get(random.nextInt(availableCommands.size())));
                             break;
                     }
 
@@ -312,19 +300,15 @@ public class DonatePayWebSocketHandler {
                         DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute(command, username));
                     }
 
-                    if (!title.isEmpty()) {
-                        DonateIntegrate.commands.add(new DonateIntegrate.CommandToExecute("title @a title \"" + title + "\"", username));
-                    }
-
                     config.setLastDonate(id);
                     ConfigHandler.save();
-                    DonateIntegrate.LOGGER.info("Processed donation #{}: {} donated {}, executed {} commands", id, username, sum, commandsToExecute.size());
+                    DonateIntegrate.LOGGER.info("Processed donation #{}: {} donated {}, message: {}, executed {} commands", id, username, sum, comment, commandsToExecute.size());
                     break;
                 }
             }
 
             if (!actionFound) {
-                DonateIntegrate.LOGGER.warn("No action for donation sum: {}", sum);
+                DonateIntegrate.LOGGER.warn("No enabled action for donation sum: {}", sum);
             }
         }
     }

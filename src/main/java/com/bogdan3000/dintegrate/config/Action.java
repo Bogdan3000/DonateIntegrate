@@ -5,27 +5,26 @@ import java.util.List;
 
 public class Action {
     private int sum;
-    private String message;
+    private boolean enabled;
     private List<String> commands;
     private ExecutionMode executionMode;
 
     public enum ExecutionMode {
-        SEQUENTIAL,
-        RANDOM_ONE,
-        RANDOM_MULTIPLE,
-        ALL
+        ALL,
+        RANDOM_ONE
     }
 
     public Action() {
         this.commands = new ArrayList<>();
-        this.executionMode = ExecutionMode.SEQUENTIAL;
+        this.executionMode = ExecutionMode.ALL;
+        this.enabled = true;
     }
 
-    public Action(int sum, String message, List<String> commands, ExecutionMode executionMode) {
+    public Action(int sum, boolean enabled, List<String> commands, ExecutionMode executionMode) {
         this.sum = sum;
-        this.message = message != null ? message : "";
+        this.enabled = enabled;
         this.commands = commands != null ? new ArrayList<>(commands) : new ArrayList<>();
-        this.executionMode = executionMode != null ? executionMode : ExecutionMode.SEQUENTIAL;
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.ALL;
     }
 
     public int getSum() {
@@ -36,12 +35,12 @@ public class Action {
         this.sum = sum;
     }
 
-    public String getMessage() {
-        return message;
+    public boolean isEnabled() {
+        return enabled;
     }
 
-    public void setMessage(String message) {
-        this.message = message;
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
     public List<String> getCommands() {
@@ -57,6 +56,6 @@ public class Action {
     }
 
     public void setExecutionMode(ExecutionMode executionMode) {
-        this.executionMode = executionMode != null ? executionMode : ExecutionMode.SEQUENTIAL;
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.ALL;
     }
 }

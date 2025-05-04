@@ -40,7 +40,6 @@ public class DonateIntegrate {
     private static DonatePayWebSocketHandler wsHandler;
     private static ExecutorService commandExecutor;
 
-    // Структура для хранения команд с указанием игрока
     public static class CommandToExecute {
         public final String command;
         public final String playerName;
@@ -110,13 +109,16 @@ public class DonateIntegrate {
                 }
             }
 
-            if (tickCounter % 40 == 0 && !commands.isEmpty()) {
+            if (tickCounter % 100 == 0) {
+                ConfigHandler.checkAndReloadConfig();
+            }
+
+            if (tickCounter % 10 == 0 && !commands.isEmpty()) {
                 CommandToExecute cmd = commands.remove(0);
                 commandExecutor.submit(() -> {
                     Minecraft mc = Minecraft.getMinecraft();
                     if (mc.player != null) {
                         mc.addScheduledTask(() -> {
-                            // Команды начинаются с "/", остальное — просто сообщение
                             if (cmd.command.startsWith("/")) {
                                 mc.player.sendChatMessage(cmd.command);
                                 LOGGER.debug("Sent command as {}: {}", cmd.playerName, cmd.command);
@@ -128,7 +130,6 @@ public class DonateIntegrate {
                     }
                 });
             }
-
         }
     }
 }

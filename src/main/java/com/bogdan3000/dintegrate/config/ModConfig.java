@@ -14,32 +14,32 @@ public class ModConfig {
     public ModConfig() {
         actions.add(new Action(
                 10,
-                "{username} donated 10! Message: {message}",
+                true,
                 Arrays.asList(
-                        "Thanks for donation: {message}",
-                        "/give @s diamond 1"
+                        "/give @s diamond 1",
+                        "/say Thanks {username} for the 10 donation: {message}"
                 ),
-                Action.ExecutionMode.SEQUENTIAL
+                Action.ExecutionMode.ALL
         ));
         actions.add(new Action(
                 20,
-                "{username} donated 20! Message: {message}",
+                true,
                 Arrays.asList(
-                        "give @s emerald 5",
-                        "effect @s speed 30 1",
-                        "say Epic donation from {username}: {message}"
+                        "/give @s emerald 5",
+                        "/effect @s speed 30 1",
+                        "/say Epic donation from {username}: {message}"
                 ),
                 Action.ExecutionMode.RANDOM_ONE
         ));
         actions.add(new Action(
                 50,
-                "{username} donated 50! Message: {message}",
+                true,
                 Arrays.asList(
-                        "give @s diamond_block 1",
-                        "effect @s strength 60 2",
-                        "/say Legendary {username}: {message}"
+                        "/give @s diamond_block 1",
+                        "/effect @s strength 60 2",
+                        "/say Legendary donation from {username}: {message}"
                 ),
-                Action.ExecutionMode.RANDOM_MULTIPLE
+                Action.ExecutionMode.ALL
         ));
     }
 
@@ -80,6 +80,6 @@ public class ModConfig {
     }
 
     public void setActions(List<Action> actions) {
-        this.actions = actions;
+        this.actions = actions != null ? new ArrayList<>(actions) : new ArrayList<>();
     }
 }
