@@ -2,6 +2,8 @@ package com.bogdan3000.dintegrate;
 
 import com.bogdan3000.dintegrate.command.DPICommand;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
+import com.bogdan3000.dintegrate.donatepay.DonatePayApiClient;
+import com.bogdan3000.dintegrate.donatepay.DonatePayWebSocketHandler;
 import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.FMLCommonHandler;
@@ -22,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "1.2.0")
+@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "1.3.0")
 public class DonateIntegrate {
     public static final String MOD_ID = "dintegrate";
     public static final String NAME = "DonateIntegrate";
@@ -31,7 +33,7 @@ public class DonateIntegrate {
     @Instance
     public static DonateIntegrate instance;
 
-    private static WebSocketHandler wsHandler;
+    private static DonatePayWebSocketHandler wsHandler;
     private static ExecutorService commandExecutor;
 
     @EventHandler
@@ -44,7 +46,7 @@ public class DonateIntegrate {
     public void init(FMLInitializationEvent event) {
         LOGGER.info("Registering server tick handler");
         MinecraftForge.EVENT_BUS.register(new ServerTickHandler());
-        commandExecutor = Executors.newFixedThreadPool(2); // Пул для асинхронного выполнения команд
+        commandExecutor = Executors.newFixedThreadPool(2);
     }
 
     @EventHandler
@@ -66,7 +68,7 @@ public class DonateIntegrate {
     public static void startWebSocketHandler() {
         stopWebSocketHandler();
         LOGGER.info("Starting WebSocket handler");
-        wsHandler = new WebSocketHandler(new ApiClient());
+        wsHandler = new DonatePayWebSocketHandler(new DonatePayApiClient());
         new Thread(wsHandler::start, "WebSocketThread").start();
     }
 
@@ -86,7 +88,6 @@ public class DonateIntegrate {
             if (event.phase != TickEvent.Phase.END) return;
 
             tickCounter++;
-            // Проверка WebSocket каждые 5 минут (6000 тиков = 5 минут при 20 TPS)
             if (tickCounter % 6000 == 0) {
                 if (wsHandler == null) {
                     LOGGER.info("WebSocket handler not running, restarting");
@@ -94,7 +95,6 @@ public class DonateIntegrate {
                 }
             }
 
-            // Выполнение команд каждые 2 секунды (40 тиков)
             if (tickCounter % 40 == 0 && !commands.isEmpty()) {
                 MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
                 if (server != null) {

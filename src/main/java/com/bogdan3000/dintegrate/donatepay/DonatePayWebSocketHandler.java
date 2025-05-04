@@ -1,5 +1,6 @@
-package com.bogdan3000.dintegrate;
+package com.bogdan3000.dintegrate.donatepay;
 
+import com.bogdan3000.dintegrate.DonateIntegrate;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.config.ModConfig;
 import com.google.gson.Gson;
@@ -9,27 +10,26 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class WebSocketHandler {
+public class DonatePayWebSocketHandler {
     private final Gson gson = new Gson();
     private final AtomicInteger messageId = new AtomicInteger(3);
     private DonatepayWebSocket client;
-    private final ApiClient apiClient;
+    private final DonatePayApiClient apiClient;
     private boolean isRunning = false;
     private ScheduledExecutorService pingScheduler;
 
-    public WebSocketHandler(ApiClient apiClient) {
+    public DonatePayWebSocketHandler(DonatePayApiClient apiClient) {
         this.apiClient = apiClient;
     }
 
     public void start() {
-        ModConfig config = ConfigHandler.load();
+        ModConfig config = ConfigHandler.getConfig();
         if (!config.isEnabled() || config.getDonpayToken().isEmpty()) {
             DonateIntegrate.LOGGER.info("Donation processing disabled or token not set");
             return;
@@ -98,7 +98,7 @@ public class WebSocketHandler {
     }
 
     private String maskToken(String token) {
-        if (token.length() <= 10) return token;
+        if (token == null || token.length() <= 10) return token;
         return token.substring(0, 5) + "..." + token.substring(token.length() - 5);
     }
 
@@ -184,13 +184,13 @@ public class WebSocketHandler {
             clientId = result.get("client").getAsString();
             DonateIntegrate.LOGGER.info("Client ID: {}", clientId);
 
-            ModConfig config = ConfigHandler.load();
+            ModConfig config = ConfigHandler.getConfig();
             String userId = config.getUserId();
             if (userId == null || userId.isEmpty()) {
                 userId = apiClient.getUserId(accessToken);
                 if (userId != null) {
                     config.setUserId(userId);
-                    ConfigHandler.save(config);
+                    ConfigHandler.save();
                 } else {
                     DonateIntegrate.LOGGER.error("User ID unavailable. Set manually with /dpi set_userid <id>");
                     return;
@@ -268,31 +268,55 @@ public class WebSocketHandler {
         }
 
         private void processDonation(int id, float sum, String username, String message) {
-            ModConfig config = ConfigHandler.load();
+            ModConfig config = ConfigHandler.getConfig();
             if (id <= config.getLastDonate()) {
                 DonateIntegrate.LOGGER.info("Skipping processed donation #{}", id);
                 return;
             }
 
             boolean actionFound = false;
+            Random random = new Random();
             for (com.bogdan3000.dintegrate.config.Action action : config.getActions()) {
                 if (Math.abs((float) action.getSum() - sum) < 0.001) {
-                    String command = action.getCommand().replace("{username}", username);
-                    String title = action.getMessage().replace("{message}", message);
+                    actionFound = true;
+                    List<String> commandsToExecute = new ArrayList<>();
+                    String title = action.getMessage().replace("{username}", username).replace("{message}", message);
 
-                    if (command.startsWith("/")) {
-                        command = "/execute as @s run " + command.substring(1);
-                    } else {
-                        command = "/say " + command;
+                    List<String> availableCommands = action.getCommands();
+                    switch (action.getExecutionMode()) {
+                        case SEQUENTIAL:
+                            commandsToExecute.addAll(availableCommands);
+                            break;
+                        case RANDOM_ONE:
+                            if (!availableCommands.isEmpty()) {
+                                commandsToExecute.add(availableCommands.get(random.nextInt(availableCommands.size())));
+                            }
+                            break;
+                        case RANDOM_MULTIPLE:
+                            if (!availableCommands.isEmpty()) {
+                                int count = random.nextInt(availableCommands.size()) + 1;
+                                List<String> shuffled = new ArrayList<>(availableCommands);
+                                Collections.shuffle(shuffled, random);
+                                commandsToExecute.addAll(shuffled.subList(0, Math.min(count, shuffled.size())));
+                            }
+                            break;
+                        case ALL:
+                            commandsToExecute.addAll(availableCommands);
+                            break;
                     }
 
-                    DonateIntegrate.commands.add(command);
-                    DonateIntegrate.commands.add("title @a title \"" + title + "\"");
-                    actionFound = true;
+                    for (String cmd : commandsToExecute) {
+                        String command = cmd.replace("{username}", username).replace("{message}", message);
+                        DonateIntegrate.commands.add(command.startsWith("/") ? command : "/say " + command);
+                    }
+
+                    if (!title.isEmpty()) {
+                        DonateIntegrate.commands.add("title @a title \"" + title + "\"");
+                    }
 
                     config.setLastDonate(id);
-                    ConfigHandler.save(config);
-                    DonateIntegrate.LOGGER.info("Processed donation #{}: {} donated {}", id, username, sum);
+                    ConfigHandler.save();
+                    DonateIntegrate.LOGGER.info("Processed donation #{}: {} donated {}, executed {} commands", id, username, sum, commandsToExecute.size());
                     break;
                 }
             }

@@ -10,6 +10,11 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.text.TextComponentString;
 import net.minecraft.util.text.TextFormatting;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+
 public class DPICommand extends CommandBase {
     @Override
     public String getName() {
@@ -29,7 +34,7 @@ public class DPICommand extends CommandBase {
         }
 
         String subCommand = args[0].toLowerCase();
-        ModConfig config = ConfigHandler.load();
+        ModConfig config = ConfigHandler.getConfig();
 
         switch (subCommand) {
             case "set_token":
@@ -41,7 +46,7 @@ public class DPICommand extends CommandBase {
                     throw new CommandException("Token too short");
                 }
                 config.setDonpayToken(token);
-                ConfigHandler.save(config);
+                ConfigHandler.save();
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonatePay token updated"));
                 DonateIntegrate.LOGGER.info("Token updated by {}", sender.getName());
                 DonateIntegrate.startWebSocketHandler();
@@ -56,7 +61,7 @@ public class DPICommand extends CommandBase {
                     throw new CommandException("User ID must be numeric");
                 }
                 config.setUserId(userId);
-                ConfigHandler.save(config);
+                ConfigHandler.save();
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "User ID set to " + userId));
                 DonateIntegrate.LOGGER.info("User ID set to {} by {}", userId, sender.getName());
                 DonateIntegrate.startWebSocketHandler();
@@ -64,14 +69,14 @@ public class DPICommand extends CommandBase {
 
             case "enable":
                 config.setEnabled(true);
-                ConfigHandler.save(config);
+                ConfigHandler.save();
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonateIntegrate enabled"));
                 DonateIntegrate.startWebSocketHandler();
                 break;
 
             case "disable":
                 config.setEnabled(false);
-                ConfigHandler.save(config);
+                ConfigHandler.save();
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonateIntegrate disabled"));
                 DonateIntegrate.stopWebSocketHandler();
                 break;
@@ -135,31 +140,56 @@ public class DPICommand extends CommandBase {
     }
 
     private String maskToken(String token) {
+        if (token.isEmpty()) return "<empty>";
         if (token.length() <= 10) return token;
         return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
     }
 
     private void testDonation(ICommandSender sender, String username, int amount) {
-        ModConfig config = ConfigHandler.load();
+        ModConfig config = ConfigHandler.getConfig();
         boolean actionFound = false;
+        Random random = new Random();
 
         for (com.bogdan3000.dintegrate.config.Action action : config.getActions()) {
             if (action.getSum() == amount) {
-                String command = action.getCommand().replace("{username}", username);
+                List<String> commandsToExecute = new ArrayList<>();
                 String title = action.getMessage().replace("{username}", username);
 
-                if (command.startsWith("/")) {
-                    command = "/execute as @s run " + command.substring(1);
-                } else {
-                    command = "/say " + command;
+                List<String> availableCommands = action.getCommands();
+                switch (action.getExecutionMode()) {
+                    case SEQUENTIAL:
+                        commandsToExecute.addAll(availableCommands);
+                        break;
+                    case RANDOM_ONE:
+                        if (!availableCommands.isEmpty()) {
+                            commandsToExecute.add(availableCommands.get(random.nextInt(availableCommands.size())));
+                        }
+                        break;
+                    case RANDOM_MULTIPLE:
+                        if (!availableCommands.isEmpty()) {
+                            int count = random.nextInt(availableCommands.size()) + 1;
+                            List<String> shuffled = new ArrayList<>(availableCommands);
+                            Collections.shuffle(shuffled, random);
+                            commandsToExecute.addAll(shuffled.subList(0, Math.min(count, shuffled.size())));
+                        }
+                        break;
+                    case ALL:
+                        commandsToExecute.addAll(availableCommands);
+                        break;
                 }
 
-                DonateIntegrate.commands.add(command);
-                DonateIntegrate.commands.add("title @a title \"" + title + "\"");
+                for (String cmd : commandsToExecute) {
+                    String command = cmd.replace("{username}", username);
+                    DonateIntegrate.commands.add(command.startsWith("/") ? command : "/say " + command);
+                }
+
+                if (!title.isEmpty()) {
+                    DonateIntegrate.commands.add("title @a title \"" + title + "\"");
+                }
 
                 sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Test donation triggered: " +
                         TextFormatting.YELLOW + username + TextFormatting.GREEN + " donated " +
-                        TextFormatting.GOLD + amount));
+                        TextFormatting.GOLD + amount + ", executed " + commandsToExecute.size() + " commands"));
                 actionFound = true;
                 break;
             }

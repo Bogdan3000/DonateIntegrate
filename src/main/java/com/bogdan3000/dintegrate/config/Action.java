@@ -1,17 +1,31 @@
 package com.bogdan3000.dintegrate.config;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Action {
     private int sum;
     private String message;
-    private String command;
+    private List<String> commands;
+    private ExecutionMode executionMode;
 
-    public Action() {
+    public enum ExecutionMode {
+        SEQUENTIAL,
+        RANDOM_ONE,
+        RANDOM_MULTIPLE,
+        ALL
     }
 
-    public Action(int sum, String message, String command) {
+    public Action() {
+        this.commands = new ArrayList<>();
+        this.executionMode = ExecutionMode.SEQUENTIAL;
+    }
+
+    public Action(int sum, String message, List<String> commands, ExecutionMode executionMode) {
         this.sum = sum;
-        this.message = message;
-        this.command = command;
+        this.message = message != null ? message : "";
+        this.commands = commands != null ? new ArrayList<>(commands) : new ArrayList<>();
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.SEQUENTIAL;
     }
 
     public int getSum() {
@@ -30,11 +44,19 @@ public class Action {
         this.message = message;
     }
 
-    public String getCommand() {
-        return command;
+    public List<String> getCommands() {
+        return commands;
     }
 
-    public void setCommand(String command) {
-        this.command = command;
+    public void setCommands(List<String> commands) {
+        this.commands = commands != null ? new ArrayList<>(commands) : new ArrayList<>();
+    }
+
+    public ExecutionMode getExecutionMode() {
+        return executionMode;
+    }
+
+    public void setExecutionMode(ExecutionMode executionMode) {
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.SEQUENTIAL;
     }
 }

@@ -1,6 +1,7 @@
 package com.bogdan3000.dintegrate.config;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class ModConfig {
@@ -11,8 +12,32 @@ public class ModConfig {
     private List<Action> actions = new ArrayList<>();
 
     public ModConfig() {
-        // Пример действия по умолчанию
-        actions.add(new Action(10, "{username} donated 10!", "give {username} diamond 1"));
+        actions.add(new Action(
+                10,
+                "{username} donated 10!",
+                Arrays.asList("give {username} diamond 1", "/say Thanks {username}!"),
+                Action.ExecutionMode.SEQUENTIAL
+        ));
+        actions.add(new Action(
+                20,
+                "{username} donated 20!",
+                Arrays.asList(
+                        "give {username} emerald 5",
+                        "effect {username} speed 30 1",
+                        "say Epic donation from {username}!"
+                ),
+                Action.ExecutionMode.RANDOM_ONE
+        ));
+        actions.add(new Action(
+                50,
+                "{username} donated 50!",
+                Arrays.asList(
+                        "give {username} diamond_block 1",
+                        "effect {username} strength 60 2",
+                        "/say Legendary {username}!"
+                ),
+                Action.ExecutionMode.RANDOM_MULTIPLE
+        ));
     }
 
     public boolean isEnabled() {

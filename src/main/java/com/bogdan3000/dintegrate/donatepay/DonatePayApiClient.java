@@ -1,5 +1,6 @@
-package com.bogdan3000.dintegrate;
+package com.bogdan3000.dintegrate.donatepay;
 
+import com.bogdan3000.dintegrate.DonateIntegrate;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -11,7 +12,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-public class ApiClient {
+public class DonatePayApiClient {
     private final Gson gson = new Gson();
 
     public String getConnectionToken(String accessToken) {
