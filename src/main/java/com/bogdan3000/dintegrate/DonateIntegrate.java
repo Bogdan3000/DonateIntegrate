@@ -22,14 +22,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "2.0.0")
+@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "2.0.3")
 public class DonateIntegrate {
     public static final String MOD_ID = "dintegrate";
     public static final String NAME = "DonateIntegrate";
     public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
 
     private static final ConcurrentLinkedQueue<CommandToExecute> commands = new ConcurrentLinkedQueue<>();
-    private static final long COMMAND_COOLDOWN_MS = 1000; // 1 секунда между командами
+    private static final long COMMAND_COOLDOWN_MS = 1; // 0.01 секунда между командами
 
     private static DonationProvider donationProvider;
     private static ExecutorService commandExecutor;
@@ -191,7 +191,7 @@ public class DonateIntegrate {
                 }
             }
 
-            if (tickCounter % 10 == 0 && !commands.isEmpty()) { // Каждые 0.5 секунды
+            if (tickCounter % 2 == 0 && !commands.isEmpty()) { // Каждые 0.5 секунды
                 long currentTime = System.currentTimeMillis();
                 if (currentTime - lastCommandTime < COMMAND_COOLDOWN_MS) {
                     return;
