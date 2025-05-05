@@ -1,4 +1,4 @@
-# DonateIntegrate Language File (Russian)
+# Donate Integrate Language File (Russian)
 # GUI Elements
 dintegrate.gui.tab.settings=Настройки
 dintegrate.gui.tab.actions=Действия
@@ -39,8 +39,8 @@ dintegrate.gui.message.empty_credentials=Токен и ID пользовател
 dintegrate.gui.message.settings_saved=Настройки успешно сохранены!
 dintegrate.gui.message.action_deleted=Действие успешно удалено!
 dintegrate.gui.message.reconnection_initiated=Переподключение начато!
-dintegrate.gui.message.enabled=DonateIntegrate включен!
-dintegrate.gui.message.disabled=DonateIntegrate отключен!
+dintegrate.gui.message.enabled=Donate Integrate включен!
+dintegrate.gui.message.disabled=Donate Integrate отключен!
 dintegrate.gui.message.positive_sum=Сумма должна быть положительной!
 dintegrate.gui.message.negative_priority=Приоритет не может быть отрицательным!
 dintegrate.gui.message.no_commands=Необходимо указать хотя бы одну команду!
@@ -51,7 +51,7 @@ dintegrate.gui.message.save_error=Ошибка при сохранении:
 
 # Command Messages
 dintegrate.command.usage=/dpi [gui|set_token <токен>|set_userid <userId>|enable|disable|status|reload|reload_config|test <имя_игрока> <сумма> [сообщение]]
-dintegrate.command.help.title=== Команды DonateIntegrate ===
+dintegrate.command.help.title=== Команды Donate Integrate ===
 dintegrate.command.help.gui=/dpi gui - Открыть интерфейс настроек
 dintegrate.command.help.set_token=/dpi set_token <токен> - Установить токен DonatePay
 dintegrate.command.help.set_userid=/dpi set_userid <userId> - Установить ID пользователя
@@ -61,18 +61,18 @@ dintegrate.command.help.status=/dpi status - Показать статус ко�
 dintegrate.command.help.reload=/dpi reload - Перезагрузить соединение
 dintegrate.command.help.reload_config=/dpi reload_config - Перезагрузить конфигурацию
 dintegrate.command.help.test=/dpi test <имя_игрока> <сумма> [сообщение] - Тестировать донат
-dintegrate.command.status.title=== Статус DonateIntegrate ===
+dintegrate.command.status.title=== Статус Donate Integrate ===
 dintegrate.command.status.enabled=Включено: %s
 dintegrate.command.status.token=Токен: %s
 dintegrate.command.status.user_id=ID пользователя: %s
 dintegrate.command.status.last_donation=ID последнего доната: %d
 dintegrate.command.status.actions=Действия: %d
 dintegrate.command.status.action=- Сумма: %s, Включено: %s, Приоритет: %s, Режим: %s, Команд: %s
-dintegrate.command.gui_open=Открытие интерфейса DonateIntegrate
+dintegrate.command.gui_open=Открытие интерфейса Donate Integrate
 dintegrate.command.token_updated=Токен DonatePay обновлен
 dintegrate.command.userid_set=ID пользователя установлен: %s
-dintegrate.command.enabled=DonateIntegrate включен
-dintegrate.command.disabled=DonateIntegrate отключен
+dintegrate.command.enabled=Donate Integrate включен
+dintegrate.command.disabled=Donate Integrate отключен
 dintegrate.command.reloaded=Провайдер донатов перезагружен
 dintegrate.command.config_reloaded=Конфигурация перезагружена
 dintegrate.command.test_success=Тестовый донат: %s пожертвовал %s, сообщение: %s, добавлено %d команд
@@ -89,5 +89,5 @@ dintegrate.command.error.no_action=Нет активных действий дл
 dintegrate.command.error.internal=Внутренняя ошибка: %s
 
 # Key Binding
-key.dintegrate.open_gui=Открыть интерфейс DonateIntegrate
-key.categories.dintegrate=DonateIntegrate
+key.dintegrate.open_gui=Открыть интерфейс Donate Integrate
+key.categories.dintegrate=Donate Integrate

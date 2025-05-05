@@ -1,4 +1,4 @@
-# DonateIntegrate Language File (Spanish)
+# Donate Integrate Language File (Spanish)
 # GUI Elements
 dintegrate.gui.tab.settings=Configuración
 dintegrate.gui.tab.actions=Acciones
@@ -39,8 +39,8 @@ dintegrate.gui.message.empty_credentials=¡El token y el ID de usuario no pueden
 dintegrate.gui.message.settings_saved=¡Configuración guardada con éxito!
 dintegrate.gui.message.action_deleted=¡Acción eliminada con éxito!
 dintegrate.gui.message.reconnection_initiated=¡Reconexión iniciada!
-dintegrate.gui.message.enabled=¡DonateIntegrate activado!
-dintegrate.gui.message.disabled=¡DonateIntegrate desactivado!
+dintegrate.gui.message.enabled=¡Donate Integrate activado!
+dintegrate.gui.message.disabled=¡Donate Integrate desactivado!
 dintegrate.gui.message.positive_sum=¡La cantidad debe ser positiva!
 dintegrate.gui.message.negative_priority=¡La prioridad no puede ser negativa!
 dintegrate.gui.message.no_commands=¡Se requiere al menos un comando!
@@ -51,7 +51,7 @@ dintegrate.gui.message.save_error=Error al guardar:
 
 # Command Messages
 dintegrate.command.usage=/dpi [gui|set_token <token>|set_userid <userId>|enable|disable|status|reload|reload_config|test <nombre> <cantidad> [mensaje]]
-dintegrate.command.help.title=== Comandos de DonateIntegrate ===
+dintegrate.command.help.title=== Comandos de Donate Integrate ===
 dintegrate.command.help.gui=/dpi gui - Abrir interfaz de configuración
 dintegrate.command.help.set_token=/dpi set_token <token> - Establecer token de DonatePay
 dintegrate.command.help.set_userid=/dpi set_userid <userId> - Establecer ID de usuario
@@ -61,18 +61,18 @@ dintegrate.command.help.status=/dpi status - Mostrar estado de configuración
 dintegrate.command.help.reload=/dpi reload - Recargar conexión
 dintegrate.command.help.reload_config=/dpi reload_config - Recargar configuración
 dintegrate.command.help.test=/dpi test <nombre> <cantidad> [mensaje] - Probar una donación
-dintegrate.command.status.title=== Estado de DonateIntegrate ===
+dintegrate.command.status.title=== Estado de Donate Integrate ===
 dintegrate.command.status.enabled=Activado: %s
 dintegrate.command.status.token=Token: %s
 dintegrate.command.status.user_id=ID de usuario: %s
 dintegrate.command.status.last_donation=ID de la última donación: %d
 dintegrate.command.status.actions=Acciones: %d
 dintegrate.command.status.action=- Cantidad: %s, Activado: %s, Prioridad: %s, Modo: %s, Comandos: %s
-dintegrate.command.gui_open=Abriendo interfaz de DonateIntegrate
+dintegrate.command.gui_open=Abriendo interfaz de Donate Integrate
 dintegrate.command.token_updated=Token de DonatePay actualizado
 dintegrate.command.userid_set=ID de usuario establecido: %s
-dintegrate.command.enabled=DonateIntegrate activado
-dintegrate.command.disabled=DonateIntegrate desactivado
+dintegrate.command.enabled=Donate Integrate activado
+dintegrate.command.disabled=Donate Integrate desactivado
 dintegrate.command.reloaded=Proveedor de donaciones recargado
 dintegrate.command.config_reloaded=Configuración recargada
 dintegrate.command.test_success=Donación de prueba: %s donó %s, mensaje: %s, añadidos %d comandos
@@ -89,5 +89,5 @@ dintegrate.command.error.no_action=No hay acciones activas para la cantidad: %s
 dintegrate.command.error.internal=Error interno: %s
 
 # Key Binding
-key.dintegrate.open_gui=Abrir interfaz de DonateIntegrate
-key.categories.dintegrate=DonateIntegrate
+key.dintegrate.open_gui=Abrir interfaz de Donate Integrate
+key.categories.dintegrate=Donate Integrate

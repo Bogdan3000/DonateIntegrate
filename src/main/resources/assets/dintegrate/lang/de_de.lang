@@ -1,4 +1,4 @@
-# DonateIntegrate Language File (German)
+# Donate Integrate Language File (German)
 # GUI Elements
 dintegrate.gui.tab.settings=Einstellungen
 dintegrate.gui.tab.actions=Aktionen
@@ -39,8 +39,8 @@ dintegrate.gui.message.empty_credentials=Token und Benutzer-ID dürfen nicht lee
 dintegrate.gui.message.settings_saved=Einstellungen erfolgreich gespeichert!
 dintegrate.gui.message.action_deleted=Aktion erfolgreich gelöscht!
 dintegrate.gui.message.reconnection_initiated=Neuverbindung gestartet!
-dintegrate.gui.message.enabled=DonateIntegrate aktiviert!
-dintegrate.gui.message.disabled=DonateIntegrate deaktiviert!
+dintegrate.gui.message.enabled=Donate Integrate aktiviert!
+dintegrate.gui.message.disabled=Donate Integrate deaktiviert!
 dintegrate.gui.message.positive_sum=Der Betrag muss positiv sein!
 dintegrate.gui.message.negative_priority=Die Priorität darf nicht negativ sein!
 dintegrate.gui.message.no_commands=Mindestens ein Befehl ist erforderlich!
@@ -68,11 +68,11 @@ dintegrate.command.status.user_id=Benutzer-ID: %s
 dintegrate.command.status.last_donation=ID der letzten Spende: %d
 dintegrate.command.status.actions=Aktionen: %d
 dintegrate.command.status.action=- Betrag: %s, Aktiviert: %s, Priorität: %s, Modus: %s, Befehle: %s
-dintegrate.command.gui_open=Öffne DonateIntegrate-Oberfläche
+dintegrate.command.gui_open=Öffne Donate Integrate-Oberfläche
 dintegrate.command.token_updated=DonatePay-Token aktualisiert
 dintegrate.command.userid_set=Benutzer-ID gesetzt: %s
-dintegrate.command.enabled=DonateIntegrate aktiviert
-dintegrate.command.disabled=DonateIntegrate deaktiviert
+dintegrate.command.enabled=Donate Integrate aktiviert
+dintegrate.command.disabled=Donate Integrate deaktiviert
 dintegrate.command.reloaded=Donation provider reloadedkey.categories.dintegrate
 dintegrate.command.config_reloaded=Konfiguration neu geladen
 dintegrate.command.test_success=Testspende: %s spendete %s, Nachricht: %s, %d Befehle hinzugefügt
@@ -89,5 +89,5 @@ dintegrate.command.error.no_action=Keine aktiven Aktionen für Betrag: %s
 dintegrate.command.error.internal=Interner Fehler: %s
 
 # Key Binding
-key.dintegrate.open_gui=DonateIntegrate-Oberfläche öffnen
-key.categories.dintegrate=DonateIntegrate hakkı.command.reloaded
+key.dintegrate.open_gui=Donate Integrate-Oberfläche öffnen
+key.categories.dintegrate=Donate Integrate hakkı.command.reloaded
