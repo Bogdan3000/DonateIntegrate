@@ -25,6 +25,7 @@ public class ActionEditGui extends GuiScreen {
     private static final int COMMAND_FIELD_HEIGHT = 20;
     private static final int COMMAND_LIST_HEIGHT = 80;
     private static final int MAX_VISIBLE_COMMANDS = 3;
+    private static final int SCROLL_SPEED = 20; // Pixels to scroll per mouse wheel tick
 
     private final GuiScreen parent;
     private final Action editingAction;
@@ -222,11 +223,14 @@ public class ActionEditGui extends GuiScreen {
         // Отрисовка полосы прокрутки
         if (commandFields.size() > MAX_VISIBLE_COMMANDS) {
             int maxScroll = (commandFields.size() - MAX_VISIBLE_COMMANDS) * (COMMAND_FIELD_HEIGHT + 4);
+            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll)); // Ensure scrollOffset is within bounds
             float scrollRatio = scrollOffset / (maxScroll > 0 ? maxScroll : 1);
             scrollbarHeight = Math.max(20, COMMAND_LIST_HEIGHT * MAX_VISIBLE_COMMANDS / commandFields.size());
             scrollbarTop = listTop + (int) ((COMMAND_LIST_HEIGHT - scrollbarHeight) * scrollRatio);
             int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
             GuiRenderUtils.drawRoundedRect(scrollbarLeft, scrollbarTop, 10, scrollbarHeight, 4, 0xFF546E7A);
+        } else {
+            scrollOffset = 0; // Reset scroll if no scrollbar is needed
         }
 
         super.drawScreen(mouseX, mouseY, partialTicks);
@@ -236,6 +240,82 @@ public class ActionEditGui extends GuiScreen {
     @Override
     public void onGuiClosed() {
         Keyboard.enableRepeatEvents(false);
+    }
+
+    @Override
+    public void handleMouseInput() throws IOException {
+        super.handleMouseInput();
+        int mouseX = Mouse.getEventX() * width / mc.displayWidth;
+        int mouseY = height - Mouse.getEventY() * height / mc.displayHeight - 1;
+
+        int listTop = contentTop + 120; // Calculate listTop (same as in drawScreen)
+        int listLeft = contentLeft + 20;
+        int listWidth = FIELD_WIDTH;
+        int listHeight = COMMAND_LIST_HEIGHT;
+
+        if (commandFields.size() > MAX_VISIBLE_COMMANDS) {
+            int wheel = Mouse.getEventDWheel();
+            if (wheel != 0) {
+                // Check if mouse is over the command list area
+                if (mouseX >= listLeft && mouseX <= listLeft + listWidth &&
+                        mouseY >= listTop && mouseY <= listTop + listHeight) {
+                    int maxScroll = (commandFields.size() - MAX_VISIBLE_COMMANDS) * (COMMAND_FIELD_HEIGHT + 4);
+                    scrollOffset -= wheel > 0 ? SCROLL_SPEED : -SCROLL_SPEED;
+                    scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+                }
+            }
+        }
+
+        // Optional: Handle scrollbar dragging
+        if (Mouse.isButtonDown(0)) {
+            int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
+            if (!isDraggingScrollbar && mouseX >= scrollbarLeft && mouseX <= scrollbarLeft + 10 &&
+                    mouseY >= scrollbarTop && mouseY <= scrollbarTop + scrollbarHeight) {
+                isDraggingScrollbar = true;
+            }
+        } else {
+            isDraggingScrollbar = false;
+        }
+
+        if (isDraggingScrollbar) {
+            int maxScroll = (commandFields.size() - MAX_VISIBLE_COMMANDS) * (COMMAND_FIELD_HEIGHT + 4);
+            float scrollRatio = (mouseY - listTop - scrollbarHeight / 2.0f) / (listHeight - scrollbarHeight);
+            scrollOffset = scrollRatio * maxScroll;
+            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+        }
+    }
+
+    @Override
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
+        super.mouseClicked(mouseX, mouseY, mouseButton);
+        sumField.mouseClicked(mouseX, mouseY, mouseButton);
+        priorityField.mouseClicked(mouseX, mouseY, mouseButton);
+        for (GuiTextField commandField : commandFields) {
+            commandField.mouseClicked(mouseX, mouseY, mouseButton);
+        }
+    }
+
+    @Override
+    protected void keyTyped(char typedChar, int keyCode) throws IOException {
+        super.keyTyped(typedChar, keyCode);
+        sumField.textboxKeyTyped(typedChar, keyCode);
+        priorityField.textboxKeyTyped(typedChar, keyCode);
+        for (GuiTextField commandField : commandFields) {
+            commandField.textboxKeyTyped(typedChar, keyCode);
+        }
+    }
+
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        sumField.updateCursorCounter();
+        priorityField.updateCursorCounter();
+        for (GuiTextField commandField : commandFields) {
+            commandField.updateCursorCounter();
+        }
+        if (fadeAnimation < 1.0f) {
+            fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
+        }
     }
 
     private static class CustomButton extends GuiButton {
@@ -261,37 +341,6 @@ public class ActionEditGui extends GuiScreen {
             GuiRenderUtils.drawButton(x, y, width, height, hovered, enabled, hoverAnimation);
             drawCenteredString(mc.fontRenderer, displayString, x + width / 2, y + (height - 8) / 2, GuiRenderUtils.getTextColor());
             GlStateManager.popMatrix();
-        }
-    }
-    @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
-        super.mouseClicked(mouseX, mouseY, mouseButton);
-        sumField.mouseClicked(mouseX, mouseY, mouseButton);
-        priorityField.mouseClicked(mouseX, mouseY, mouseButton);
-        for (GuiTextField commandField : commandFields) {
-            commandField.mouseClicked(mouseX, mouseY, mouseButton);
-        }
-    }
-
-    @Override
-    protected void keyTyped(char typedChar, int keyCode) throws IOException {
-        super.keyTyped(typedChar, keyCode);
-        sumField.textboxKeyTyped(typedChar, keyCode);
-        priorityField.textboxKeyTyped(typedChar, keyCode);
-        for (GuiTextField commandField : commandFields) {
-            commandField.textboxKeyTyped(typedChar, keyCode);
-        }
-    }
-    @Override
-    public void updateScreen() {
-        super.updateScreen();
-        sumField.updateCursorCounter();
-        priorityField.updateCursorCounter();
-        for (GuiTextField commandField : commandFields) {
-            commandField.updateCursorCounter();
-        }
-        if (fadeAnimation < 1.0f) {
-            fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
         }
     }
 }

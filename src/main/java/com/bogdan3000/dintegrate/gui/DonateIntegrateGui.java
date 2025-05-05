@@ -36,7 +36,7 @@ public class DonateIntegrateGui extends GuiScreen {
     private final List<TabButton> tabButtons = new ArrayList<>();
     private final List<String> donationHistory = new CopyOnWriteArrayList<>();
 
-    private GuiTextField tokenField;
+    private ObfuscatedTextField tokenField;
     private GuiTextField userIdField;
     private CustomButton saveSettingsButton;
     private CustomButton clearSettingsButton;
@@ -59,6 +59,7 @@ public class DonateIntegrateGui extends GuiScreen {
         fadeAnimation = 0.0f;
         selectedActionIndex = -1;
         scrollOffset = 0.0f;
+        currentTab = 1; // Default to Actions tab instead of Settings
 
         contentLeft = (width - CONTENT_WIDTH) / 2;
         contentTop = (height - CONTENT_HEIGHT) / 2;
@@ -69,7 +70,7 @@ public class DonateIntegrateGui extends GuiScreen {
             tabButtons.add(tabButton);
         }
 
-        tokenField = new GuiTextField(100, fontRenderer, contentLeft + 20, contentTop + 60, CONTENT_WIDTH - 40, 20);
+        tokenField = new ObfuscatedTextField(100, fontRenderer, contentLeft + 20, contentTop + 60, CONTENT_WIDTH - 40, 20);
         tokenField.setMaxStringLength(100);
         tokenField.setText(ConfigHandler.getConfig().getDonpayToken());
         userIdField = new GuiTextField(101, fontRenderer, contentLeft + 20, contentTop + 110, CONTENT_WIDTH - 40, 20);
@@ -372,6 +373,37 @@ public class DonateIntegrateGui extends GuiScreen {
         super.mouseClicked(mouseX, mouseY, mouseButton);
         tokenField.mouseClicked(mouseX, mouseY, mouseButton);
         userIdField.mouseClicked(mouseX, mouseY, mouseButton);
+
+        // Handle clicks on the actions list in the Actions tab
+        if (currentTab == 1 && mouseButton == 0) { // Left click only
+            int listTop = contentTop + 60;
+            int listLeft = contentLeft + 20;
+            int listWidth = CONTENT_WIDTH - 40;
+            int listHeight = ACTION_LIST_HEIGHT;
+
+            // Check if click is within the actions list bounds
+            if (mouseX >= listLeft && mouseX <= listLeft + listWidth &&
+                    mouseY >= listTop && mouseY <= listTop + listHeight) {
+                List<Action> actions = ConfigHandler.getConfig().getActions();
+                // Calculate which action was clicked based on mouseY and scrollOffset
+                int relativeY = mouseY - listTop + (int) scrollOffset;
+                int actionIndex = relativeY / ACTION_ITEM_HEIGHT;
+                if (actionIndex >= 0 && actionIndex < actions.size()) {
+                    selectedActionIndex = actionIndex;
+                    editActionButton.enabled = true;
+                    deleteActionButton.enabled = true;
+                } else {
+                    selectedActionIndex = -1;
+                    editActionButton.enabled = false;
+                    deleteActionButton.enabled = false;
+                }
+            } else {
+                // Click outside the list deselects the current action
+                selectedActionIndex = -1;
+                editActionButton.enabled = false;
+                deleteActionButton.enabled = false;
+            }
+        }
     }
 
     @Override
@@ -380,6 +412,7 @@ public class DonateIntegrateGui extends GuiScreen {
         tokenField.textboxKeyTyped(typedChar, keyCode);
         userIdField.textboxKeyTyped(typedChar, keyCode);
     }
+
     @Override
     public void updateScreen() {
         super.updateScreen();
@@ -387,6 +420,50 @@ public class DonateIntegrateGui extends GuiScreen {
         userIdField.updateCursorCounter();
         if (fadeAnimation < 1.0f) {
             fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
+        }
+    }
+    @Override
+    public void handleMouseInput() throws IOException {
+        super.handleMouseInput();
+        int mouseX = Mouse.getEventX() * width / mc.displayWidth;
+        int mouseY = height - Mouse.getEventY() * height / mc.displayHeight - 1;
+
+        // Only handle scrolling for the Actions tab (currentTab == 1)
+        if (currentTab == 1 && ConfigHandler.getConfig().getActions().size() > ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT) {
+            int listTop = contentTop + 120;
+            int listLeft = contentLeft + 20;
+            int listWidth = CONTENT_WIDTH - 40;
+            int listHeight = ACTION_LIST_HEIGHT;
+            int maxItems = ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT;
+
+            int wheel = Mouse.getEventDWheel();
+            if (wheel != 0) {
+                // Check if mouse is over the actions list area
+                if (mouseX >= listLeft && mouseX <= listLeft + listWidth &&
+                        mouseY >= listTop && mouseY <= listTop + listHeight) {
+                    int maxScroll = (ConfigHandler.getConfig().getActions().size() - maxItems) * ACTION_ITEM_HEIGHT;
+                    scrollOffset -= wheel > 0 ? 20 : -20; // Scroll speed of 20 pixels
+                    scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+                }
+            }
+
+            // Optional: Handle scrollbar dragging
+            if (Mouse.isButtonDown(0)) {
+                int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
+                if (!isDraggingScrollbar && mouseX >= scrollbarLeft && mouseX <= scrollbarLeft + 10 &&
+                        mouseY >= scrollbarTop && mouseY <= scrollbarTop + scrollbarHeight) {
+                    isDraggingScrollbar = true;
+                }
+            } else {
+                isDraggingScrollbar = false;
+            }
+
+            if (isDraggingScrollbar) {
+                int maxScroll = (ConfigHandler.getConfig().getActions().size() - maxItems) * ACTION_ITEM_HEIGHT;
+                float scrollRatio = (mouseY - listTop - scrollbarHeight / 2.0f) / (listHeight - scrollbarHeight);
+                scrollOffset = scrollRatio * maxScroll;
+                scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+            }
         }
     }
 }
