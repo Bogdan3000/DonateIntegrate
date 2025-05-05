@@ -263,4 +263,35 @@ public class ActionEditGui extends GuiScreen {
             GlStateManager.popMatrix();
         }
     }
+    @Override
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
+        super.mouseClicked(mouseX, mouseY, mouseButton);
+        sumField.mouseClicked(mouseX, mouseY, mouseButton);
+        priorityField.mouseClicked(mouseX, mouseY, mouseButton);
+        for (GuiTextField commandField : commandFields) {
+            commandField.mouseClicked(mouseX, mouseY, mouseButton);
+        }
+    }
+
+    @Override
+    protected void keyTyped(char typedChar, int keyCode) throws IOException {
+        super.keyTyped(typedChar, keyCode);
+        sumField.textboxKeyTyped(typedChar, keyCode);
+        priorityField.textboxKeyTyped(typedChar, keyCode);
+        for (GuiTextField commandField : commandFields) {
+            commandField.textboxKeyTyped(typedChar, keyCode);
+        }
+    }
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        sumField.updateCursorCounter();
+        priorityField.updateCursorCounter();
+        for (GuiTextField commandField : commandFields) {
+            commandField.updateCursorCounter();
+        }
+        if (fadeAnimation < 1.0f) {
+            fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
+        }
+    }
 }

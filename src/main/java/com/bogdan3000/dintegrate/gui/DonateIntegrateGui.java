@@ -367,4 +367,26 @@ public class DonateIntegrateGui extends GuiScreen {
             GlStateManager.popMatrix();
         }
     }
+    @Override
+    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
+        super.mouseClicked(mouseX, mouseY, mouseButton);
+        tokenField.mouseClicked(mouseX, mouseY, mouseButton);
+        userIdField.mouseClicked(mouseX, mouseY, mouseButton);
+    }
+
+    @Override
+    protected void keyTyped(char typedChar, int keyCode) throws IOException {
+        super.keyTyped(typedChar, keyCode);
+        tokenField.textboxKeyTyped(typedChar, keyCode);
+        userIdField.textboxKeyTyped(typedChar, keyCode);
+    }
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        tokenField.updateCursorCounter();
+        userIdField.updateCursorCounter();
+        if (fadeAnimation < 1.0f) {
+            fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
+        }
+    }
 }
