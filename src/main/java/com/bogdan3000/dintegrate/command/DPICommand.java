@@ -1,21 +1,22 @@
 package com.bogdan3000.dintegrate.command;
 
 import com.bogdan3000.dintegrate.DonateIntegrate;
+import com.bogdan3000.dintegrate.NetworkHandler;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.config.ModConfig;
+import net.minecraft.client.resources.I18n;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
 import net.minecraft.command.ICommandSender;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.Style;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.util.text.TextFormatting;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Command handler for DonateIntegrate administrative commands.
- */
 public class DPICommand extends CommandBase {
     @Override
     public String getName() {
@@ -24,7 +25,7 @@ public class DPICommand extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/dpi [set_token <token>|set_userid <userId>|enable|disable|status|reload|reload_config|test <username> <amount> [message]]";
+        return I18n.format("dintegrate.command.usage");
     }
 
     @Override
@@ -39,36 +40,44 @@ public class DPICommand extends CommandBase {
 
         try {
             switch (subCommand) {
+                case "gui":
+                    if (!(sender instanceof EntityPlayerMP)) {
+                        throw new CommandException(I18n.format("dintegrate.command.error.player_only"));
+                    }
+                    EntityPlayerMP player = (EntityPlayerMP) sender;
+                    NetworkHandler.INSTANCE.sendTo(new NetworkHandler.OpenGuiMessage(), player);
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.gui_open").setStyle(new Style().setColor(TextFormatting.GREEN)));
+                    break;
                 case "set_token":
-                    if (args.length < 2) throw new CommandException("Usage: /dpi set_token <token>");
+                    if (args.length < 2) throw new CommandException(I18n.format("dintegrate.command.error.token_usage"));
                     String token = args[1];
-                    if (token.length() < 10) throw new CommandException("Token is too short");
+                    if (token.length() < 10) throw new CommandException(I18n.format("dintegrate.command.error.token_short"));
                     config.setDonpayToken(token);
                     ConfigHandler.save();
-                    sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonatePay token updated"));
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.token_updated").setStyle(new Style().setColor(TextFormatting.GREEN)));
                     DonateIntegrate.LOGGER.info("Token updated by {}", sender.getName());
                     DonateIntegrate.startDonationProvider();
                     break;
                 case "set_userid":
-                    if (args.length < 2) throw new CommandException("Usage: /dpi set_userid <userId>");
+                    if (args.length < 2) throw new CommandException(I18n.format("dintegrate.command.error.userid_usage"));
                     String userId = args[1];
-                    if (!userId.matches("\\d+")) throw new CommandException("User ID must be numeric");
+                    if (!userId.matches("\\d+")) throw new CommandException(I18n.format("dintegrate.command.error.userid_numeric"));
                     config.setUserId(userId);
                     ConfigHandler.save();
-                    sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "User ID set: " + userId));
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.userid_set", userId).setStyle(new Style().setColor(TextFormatting.GREEN)));
                     DonateIntegrate.LOGGER.info("User ID set to {} by {}", userId, sender.getName());
                     DonateIntegrate.startDonationProvider();
                     break;
                 case "enable":
                     config.setEnabled(true);
                     ConfigHandler.save();
-                    sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonateIntegrate enabled"));
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.enabled").setStyle(new Style().setColor(TextFormatting.GREEN)));
                     DonateIntegrate.startDonationProvider();
                     break;
                 case "disable":
                     config.setEnabled(false);
                     ConfigHandler.save();
-                    sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "DonateIntegrate disabled"));
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.disabled").setStyle(new Style().setColor(TextFormatting.GREEN)));
                     DonateIntegrate.stopDonationProvider();
                     break;
                 case "status":
@@ -76,23 +85,23 @@ public class DPICommand extends CommandBase {
                     break;
                 case "reload":
                     DonateIntegrate.startDonationProvider();
-                    sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Donation provider reloaded"));
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.reloaded").setStyle(new Style().setColor(TextFormatting.GREEN)));
                     break;
                 case "reload_config":
                     ConfigHandler.load();
-                    sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Configuration reloaded"));
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.config_reloaded").setStyle(new Style().setColor(TextFormatting.GREEN)));
                     DonateIntegrate.LOGGER.info("Configuration reloaded by {}", sender.getName());
                     break;
                 case "test":
-                    if (args.length < 3) throw new CommandException("Usage: /dpi test <username> <amount> [message]");
+                    if (args.length < 3) throw new CommandException(I18n.format("dintegrate.command.error.test_usage"));
                     String username = args[1];
                     float amount;
                     try {
                         amount = Float.parseFloat(args[2]);
                     } catch (NumberFormatException e) {
-                        throw new CommandException("Amount must be a number");
+                        throw new CommandException(I18n.format("dintegrate.command.error.amount_numeric"));
                     }
-                    if (amount <= 0) throw new CommandException("Amount must be positive");
+                    if (amount <= 0) throw new CommandException(I18n.format("dintegrate.command.error.amount_positive"));
                     String message = args.length > 3 ? String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length)) : "";
                     testDonation(sender, username, amount, message);
                     break;
@@ -104,46 +113,51 @@ public class DPICommand extends CommandBase {
             throw e;
         } catch (Exception e) {
             DonateIntegrate.LOGGER.error("Error executing /dpi {}: {}", subCommand, e.getMessage());
-            throw new CommandException("Internal error: " + e.getMessage());
+            throw new CommandException(I18n.format("dintegrate.command.error.internal", e.getMessage()));
         }
     }
 
     private void showHelp(ICommandSender sender) {
-        sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "=== DonateIntegrate Commands ==="));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_token <token> " + TextFormatting.GRAY + "- Set DonatePay token"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi set_userid <userId> " + TextFormatting.GRAY + "- Set User ID"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi enable " + TextFormatting.GRAY + "- Enable donation processing"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi disable " + TextFormatting.GRAY + "- Disable donation processing"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi status " + TextFormatting.GRAY + "- Show configuration status"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi reload " + TextFormatting.GRAY + "- Reload connection"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi reload_config " + TextFormatting.GRAY + "- Reload configuration"));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "/dpi test <username> <amount> [message] " + TextFormatting.GRAY + "- Test a donation"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.title").setStyle(new Style().setColor(TextFormatting.YELLOW)));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.gui"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.set_token"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.set_userid"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.enable"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.disable"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.status"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.reload"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.reload_config"));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.test"));
     }
 
     private void showStatus(ICommandSender sender, ModConfig config) {
-        sender.sendMessage(new TextComponentString(TextFormatting.YELLOW + "=== DonateIntegrate Status ==="));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Enabled: " +
-                (config.isEnabled() ? TextFormatting.GREEN + "Yes" : TextFormatting.RED + "No")));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.title").setStyle(new Style().setColor(TextFormatting.YELLOW)));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.enabled",
+                config.isEnabled() ? I18n.format("dintegrate.gui.value.yes") : I18n.format("dintegrate.gui.value.no"))
+                .setStyle(new Style().setColor(config.isEnabled() ? TextFormatting.GREEN : TextFormatting.RED)));
         String token = config.getDonpayToken();
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Token: " +
-                (token.isEmpty() ? TextFormatting.RED + "Not set" :
-                        TextFormatting.GREEN + "Set (" + maskToken(token) + ")")));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.token",
+                token.isEmpty() ? I18n.format("dintegrate.gui.value.not_set") : I18n.format("dintegrate.gui.value.set", maskToken(token)))
+                .setStyle(new Style().setColor(token.isEmpty() ? TextFormatting.RED : TextFormatting.GREEN)));
         String userId = config.getUserId();
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "User ID: " +
-                (userId.isEmpty() ? TextFormatting.RED + "Not set" : TextFormatting.GREEN + userId)));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Last Donation ID: " + TextFormatting.AQUA + config.getLastDonate()));
-        sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "Actions: " + TextFormatting.AQUA + config.getActions().size()));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.user_id",
+                userId.isEmpty() ? I18n.format("dintegrate.gui.value.not_set") : userId)
+                .setStyle(new Style().setColor(userId.isEmpty() ? TextFormatting.RED : TextFormatting.GREEN)));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.last_donation", config.getLastDonate()));
+        sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.actions", config.getActions().size()));
         for (com.bogdan3000.dintegrate.config.Action action : config.getActions()) {
-            sender.sendMessage(new TextComponentString(TextFormatting.WHITE + "- Sum: " + TextFormatting.AQUA + action.getSum() +
-                    ", Enabled: " + (action.isEnabled() ? TextFormatting.GREEN + "Yes" : TextFormatting.RED + "No") +
-                    ", Priority: " + TextFormatting.AQUA + action.getPriority() +
-                    ", Mode: " + TextFormatting.AQUA + action.getExecutionMode() +
-                    ", Commands: " + TextFormatting.AQUA + action.getCommands().size()));
+            sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.action",
+                    action.getSum(),
+                    action.isEnabled() ? I18n.format("dintegrate.gui.value.yes") : I18n.format("dintegrate.gui.value.no"),
+                    action.getPriority(),
+                    I18n.format("dintegrate.gui.value.mode." + action.getExecutionMode().name().toLowerCase()),
+                    action.getCommands().size())
+                    .setStyle(new Style().setColor(TextFormatting.WHITE)));
         }
     }
 
     private String maskToken(String token) {
-        if (token.isEmpty()) return "<empty>";
+        if (token.isEmpty()) return I18n.format("dintegrate.gui.value.empty");
         if (token.length() <= 10) return token;
         return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
     }
@@ -158,7 +172,8 @@ public class DPICommand extends CommandBase {
                 List<String> commandsToExecute = new ArrayList<>();
                 List<String> availableCommands = action.getCommands();
                 if (availableCommands.isEmpty()) {
-                    sender.sendMessage(new TextComponentString(TextFormatting.RED + "No commands for sum: " + amount));
+                    sender.sendMessage(new TextComponentTranslation("dintegrate.command.error.no_commands", amount)
+                            .setStyle(new Style().setColor(TextFormatting.RED)));
                     return;
                 }
 
@@ -178,22 +193,22 @@ public class DPICommand extends CommandBase {
                     DonateIntegrate.addCommand(new DonateIntegrate.CommandToExecute(command, username, action.getPriority()));
                 }
 
-                sender.sendMessage(new TextComponentString(TextFormatting.GREEN + "Test donation: " +
-                        TextFormatting.YELLOW + username + TextFormatting.GREEN + " donated " +
-                        TextFormatting.GOLD + amount + ", message: " + TextFormatting.AQUA + message +
-                        ", added " + commandsToExecute.size() + " commands"));
+                sender.sendMessage(new TextComponentTranslation("dintegrate.command.test_success",
+                        username, amount, message, commandsToExecute.size())
+                        .setStyle(new Style().setColor(TextFormatting.GREEN)));
                 actionFound = true;
                 break;
             }
         }
 
         if (!actionFound) {
-            sender.sendMessage(new TextComponentString(TextFormatting.RED + "No active actions for sum: " + amount));
+            sender.sendMessage(new TextComponentTranslation("dintegrate.command.error.no_action", amount)
+                    .setStyle(new Style().setColor(TextFormatting.RED)));
         }
     }
 
     @Override
     public int getRequiredPermissionLevel() {
-        return 4; // Only for operators
+        return 4;
     }
 }

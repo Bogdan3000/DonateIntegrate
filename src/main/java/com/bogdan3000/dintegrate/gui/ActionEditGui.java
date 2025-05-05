@@ -9,6 +9,7 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.resources.I18n;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
@@ -17,17 +18,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * GUI для добавления или редактирования действия доната.
- * Включает поля для суммы, приоритета, динамического списка команд с прокруткой,
- * режима выполнения и статуса активности.
- */
 public class ActionEditGui extends GuiScreen {
     private static final int CONTENT_WIDTH = 300;
-    private static final int CONTENT_HEIGHT = 300; // Увеличено для размещения всех элементов
+    private static final int CONTENT_HEIGHT = 300;
     private static final int FIELD_WIDTH = 260;
     private static final int COMMAND_FIELD_HEIGHT = 20;
-    private static final int COMMAND_LIST_HEIGHT = 80; // Высота области для списка команд
+    private static final int COMMAND_LIST_HEIGHT = 80;
     private static final int MAX_VISIBLE_COMMANDS = 3;
 
     private final GuiScreen parent;
@@ -65,20 +61,17 @@ public class ActionEditGui extends GuiScreen {
         contentLeft = (width - CONTENT_WIDTH) / 2;
         contentTop = (height - CONTENT_HEIGHT) / 2;
 
-        // Поле для суммы
         sumField = new GuiTextField(0, fontRenderer, contentLeft + 20, contentTop + 40, FIELD_WIDTH, 20);
         sumField.setMaxStringLength(10);
         sumField.setText(editingAction != null ? String.valueOf(editingAction.getSum()) : "0.0");
 
-        // Поле для приоритета
         priorityField = new GuiTextField(1, fontRenderer, contentLeft + 20, contentTop + 80, FIELD_WIDTH, 20);
         priorityField.setMaxStringLength(5);
         priorityField.setText(editingAction != null ? String.valueOf(editingAction.getPriority()) : "1");
 
-        // Инициализация списка команд
         List<String> initialCommands = editingAction != null ? editingAction.getCommands() : new ArrayList<>();
         if (initialCommands.isEmpty()) {
-            initialCommands.add(""); // Добавляем одно пустое поле по умолчанию
+            initialCommands.add("");
         }
         for (int i = 0; i < initialCommands.size(); i++) {
             GuiTextField commandField = new GuiTextField(100 + i, fontRenderer, contentLeft + 20,
@@ -88,20 +81,17 @@ public class ActionEditGui extends GuiScreen {
             commandFields.add(commandField);
         }
 
-        // Кнопки управления списком команд
         addCommandButton = new CustomButton(2, contentLeft + FIELD_WIDTH + 24, contentTop + 120, 20, 20, "+");
         removeCommandButton = new CustomButton(3, contentLeft + FIELD_WIDTH + 24, contentTop + 144, 20, 20, "−");
-        removeCommandButton.enabled = commandFields.size() > 1; // Нельзя удалить последнее поле
+        removeCommandButton.enabled = commandFields.size() > 1;
 
-        // Кнопки режима и статуса
         Action.ExecutionMode mode = editingAction != null ? editingAction.getExecutionMode() : Action.ExecutionMode.ALL;
-        executionModeButton = new CustomButton(4, contentLeft + 20, contentTop + 220, 120, 24, "Mode: " + mode.name());
+        executionModeButton = new CustomButton(4, contentLeft + 20, contentTop + 220, 120, 24, I18n.format("dintegrate.gui.label.mode") + mode.name());
         enabledButton = new CustomButton(5, contentLeft + CONTENT_WIDTH - 140, contentTop + 220, 120, 24,
-                editingAction != null ? (editingAction.isEnabled() ? "Enabled" : "Disabled") : "Enabled");
+                editingAction != null ? (editingAction.isEnabled() ? I18n.format("dintegrate.gui.value.enabled") : I18n.format("dintegrate.gui.value.disabled")) : I18n.format("dintegrate.gui.value.enabled"));
 
-        // Кнопки сохранения и отмены
-        saveButton = new CustomButton(6, contentLeft + 20, contentTop + CONTENT_HEIGHT - 40, 100, 24, "Save");
-        cancelButton = new CustomButton(7, contentLeft + CONTENT_WIDTH - 120, contentTop + CONTENT_HEIGHT - 40, 100, 24, "Cancel");
+        saveButton = new CustomButton(6, contentLeft + 20, contentTop + CONTENT_HEIGHT - 40, 100, 24, I18n.format("dintegrate.gui.button.save"));
+        cancelButton = new CustomButton(7, contentLeft + CONTENT_WIDTH - 120, contentTop + CONTENT_HEIGHT - 40, 100, 24, I18n.format("dintegrate.gui.button.cancel"));
 
         buttonList.add(addCommandButton);
         buttonList.add(removeCommandButton);
@@ -114,7 +104,7 @@ public class ActionEditGui extends GuiScreen {
     @Override
     protected void actionPerformed(GuiButton button) throws IOException {
         switch (button.id) {
-            case 2: // Добавить команду
+            case 2:
                 GuiTextField newField = new GuiTextField(100 + commandFields.size(), fontRenderer, contentLeft + 20,
                         contentTop + 120 + commandFields.size() * (COMMAND_FIELD_HEIGHT + 4), FIELD_WIDTH, COMMAND_FIELD_HEIGHT);
                 newField.setMaxStringLength(200);
@@ -122,23 +112,23 @@ public class ActionEditGui extends GuiScreen {
                 commandFields.add(newField);
                 removeCommandButton.enabled = true;
                 break;
-            case 3: // Удалить команду
+            case 3:
                 if (commandFields.size() > 1) {
                     commandFields.remove(commandFields.size() - 1);
                     removeCommandButton.enabled = commandFields.size() > 1;
                 }
                 break;
-            case 4: // Переключение режима
+            case 4:
                 Action.ExecutionMode currentMode = executionModeButton.displayString.contains("ALL") ?
                         Action.ExecutionMode.ALL : Action.ExecutionMode.RANDOM_ONE;
                 Action.ExecutionMode newMode = currentMode == Action.ExecutionMode.ALL ?
                         Action.ExecutionMode.RANDOM_ONE : Action.ExecutionMode.ALL;
-                executionModeButton.displayString = "Mode: " + newMode.name();
+                executionModeButton.displayString = I18n.format("dintegrate.gui.label.mode") + newMode.name();
                 break;
-            case 5: // Переключение статуса
-                enabledButton.displayString = enabledButton.displayString.equals("Enabled") ? "Disabled" : "Enabled";
+            case 5:
+                enabledButton.displayString = enabledButton.displayString.contains(I18n.format("dintegrate.gui.value.enabled")) ? I18n.format("dintegrate.gui.value.disabled") : I18n.format("dintegrate.gui.value.enabled");
                 break;
-            case 6: // Сохранить
+            case 6:
                 try {
                     float sum = Float.parseFloat(sumField.getText().trim());
                     int priority = Integer.parseInt(priorityField.getText().trim());
@@ -151,18 +141,18 @@ public class ActionEditGui extends GuiScreen {
                     }
                     Action.ExecutionMode mode = executionModeButton.displayString.contains("ALL") ?
                             Action.ExecutionMode.ALL : Action.ExecutionMode.RANDOM_ONE;
-                    boolean enabled = enabledButton.displayString.equals("Enabled");
+                    boolean enabled = enabledButton.displayString.contains(I18n.format("dintegrate.gui.value.enabled"));
 
                     if (sum <= 0) {
-                        mc.displayGuiScreen(new MessageGui(this, "Сумма должна быть положительной!", false));
+                        mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.positive_sum"), false));
                         return;
                     }
                     if (priority < 0) {
-                        mc.displayGuiScreen(new MessageGui(this, "Приоритет не может быть отрицательным!", false));
+                        mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.negative_priority"), false));
                         return;
                     }
                     if (commands.isEmpty()) {
-                        mc.displayGuiScreen(new MessageGui(this, "Необходимо указать хотя бы одну команду!", false));
+                        mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.no_commands"), false));
                         return;
                     }
 
@@ -177,85 +167,16 @@ public class ActionEditGui extends GuiScreen {
                         config.getActions().add(newAction);
                     }
                     ConfigHandler.save();
-                    mc.displayGuiScreen(new MessageGui(parent, editingAction != null ? "Действие обновлено!" : "Действие добавлено!", true));
+                    mc.displayGuiScreen(new MessageGui(parent, I18n.format(editingAction != null ? "dintegrate.gui.message.action_updated" : "dintegrate.gui.message.action_added"), true));
                 } catch (NumberFormatException e) {
-                    mc.displayGuiScreen(new MessageGui(this, "Неверный формат числа!", false));
+                    mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.invalid_number"), false));
                 } catch (Exception e) {
-                    mc.displayGuiScreen(new MessageGui(this, "Ошибка при сохранении: " + e.getMessage(), false));
+                    mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.save_error") + e.getMessage(), false));
                 }
                 break;
-            case 7: // Отмена
+            case 7:
                 mc.displayGuiScreen(parent);
                 break;
-        }
-    }
-
-    @Override
-    protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
-        super.mouseClicked(mouseX, mouseY, mouseButton);
-        sumField.mouseClicked(mouseX, mouseY, mouseButton);
-        priorityField.mouseClicked(mouseX, mouseY, mouseButton);
-        for (GuiTextField field : commandFields) {
-            field.mouseClicked(mouseX, mouseY, mouseButton);
-        }
-        handleScrollbarClick(mouseX, mouseY, mouseButton);
-    }
-
-    private void handleScrollbarClick(int mouseX, int mouseY, int mouseButton) {
-        int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
-        int scrollbarRight = scrollbarLeft + 10;
-        if (mouseX >= scrollbarLeft && mouseX <= scrollbarRight && mouseY >= scrollbarTop && mouseY <= scrollbarTop + scrollbarHeight) {
-            isDraggingScrollbar = true;
-        }
-    }
-
-    @Override
-    protected void mouseReleased(int mouseX, int mouseY, int state) {
-        super.mouseReleased(mouseX, mouseY, state);
-        isDraggingScrollbar = false;
-    }
-
-    @Override
-    public void handleMouseInput() throws IOException {
-        super.handleMouseInput();
-        int mouseWheel = Mouse.getEventDWheel();
-        if (mouseWheel != 0 && commandFields.size() > MAX_VISIBLE_COMMANDS) {
-            int maxScroll = (commandFields.size() - MAX_VISIBLE_COMMANDS) * (COMMAND_FIELD_HEIGHT + 4);
-            scrollOffset -= mouseWheel > 0 ? 20 : -20;
-            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
-        }
-
-        if (isDraggingScrollbar) {
-            int mouseY = Mouse.getY();
-            int screenHeight = mc.displayHeight;
-            int guiHeight = height;
-            float mouseYGui = (float) (screenHeight - mouseY) * guiHeight / screenHeight;
-            int maxScroll = (commandFields.size() - MAX_VISIBLE_COMMANDS) * (COMMAND_FIELD_HEIGHT + 4);
-            float scrollAreaHeight = COMMAND_LIST_HEIGHT - scrollbarHeight;
-            float scrollRatio = (mouseYGui - contentTop - 120) / scrollAreaHeight;
-            scrollOffset = scrollRatio * maxScroll;
-            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
-        }
-    }
-
-    @Override
-    protected void keyTyped(char typedChar, int keyCode) throws IOException {
-        if (keyCode == Keyboard.KEY_ESCAPE) {
-            mc.displayGuiScreen(parent);
-            return;
-        }
-        sumField.textboxKeyTyped(typedChar, keyCode);
-        priorityField.textboxKeyTyped(typedChar, keyCode);
-        for (GuiTextField field : commandFields) {
-            field.textboxKeyTyped(typedChar, keyCode);
-        }
-    }
-
-    @Override
-    public void updateScreen() {
-        super.updateScreen();
-        if (fadeAnimation < 1.0f) {
-            fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
         }
     }
 
@@ -266,12 +187,12 @@ public class ActionEditGui extends GuiScreen {
         GuiRenderUtils.drawOverlay(width, height);
         GuiRenderUtils.drawRoundedRect(contentLeft, contentTop, CONTENT_WIDTH, CONTENT_HEIGHT, 8, 0xFF263238);
 
-        fontRenderer.drawString(editingAction != null ? "Редактировать действие" : "Добавить действие", contentLeft + 20, contentTop + 20, GuiRenderUtils.getTextColor());
-        fontRenderer.drawString("Сумма:", contentLeft + 20, contentTop + 30, GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format(editingAction != null ? "dintegrate.gui.title.edit_action" : "dintegrate.gui.title.add_action"), contentLeft + 20, contentTop + 20, GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.sum"), contentLeft + 20, contentTop + 30, GuiRenderUtils.getTextColor());
         sumField.drawTextBox();
-        fontRenderer.drawString("Приоритет:", contentLeft + 20, contentTop + 70, GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.priority"), contentLeft + 20, contentTop + 70, GuiRenderUtils.getTextColor());
         priorityField.drawTextBox();
-        fontRenderer.drawString("Команды:", contentLeft + 20, contentTop + 110, GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.commands"), contentLeft + 20, contentTop + 110, GuiRenderUtils.getTextColor());
 
         // Отрисовка списка команд
         int listTop = contentTop + 120;

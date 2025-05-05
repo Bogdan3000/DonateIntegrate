@@ -1,0 +1,93 @@
+# DonateIntegrate Language File (French)
+# GUI Elements
+dintegrate.gui.tab.settings=Paramètres
+dintegrate.gui.tab.actions=Actions
+dintegrate.gui.tab.status=Statut
+dintegrate.gui.tab.history=Historique
+dintegrate.gui.button.save=Enregistrer
+dintegrate.gui.button.clear=Effacer
+dintegrate.gui.button.add=Ajouter
+dintegrate.gui.button.edit=Modifier
+dintegrate.gui.button.delete=Supprimer
+dintegrate.gui.button.reconnect=Reconnecter
+dintegrate.gui.button.enable=Activer
+dintegrate.gui.button.disable=Désactiver
+dintegrate.gui.button.cancel=Annuler
+dintegrate.gui.button.ok=OK
+dintegrate.gui.label.token=Token DonatePay:
+dintegrate.gui.label.user_id=ID utilisateur:
+dintegrate.gui.label.enabled=Activé:
+dintegrate.gui.label.connected=Connecté:
+dintegrate.gui.label.last_donation_id=ID du dernier don:
+dintegrate.gui.label.actions_configured=Actions configurées:
+dintegrate.gui.label.sum=Montant :
+dintegrate.gui.label.priority=Priorité:
+dintegrate.gui.label.commands=Commandes:
+dintegrate.gui.label.mode=Mode:
+dintegrate.gui.title.add_action=Ajouter une action
+dintegrate.gui.title.edit_action=Modifier l'action
+dintegrate.gui.value.yes=Oui
+dintegrate.gui.value.no=Non
+dintegrate.gui.value.set=Configuré
+dintegrate.gui.value.not_set=Non configuré
+dintegrate.gui.value.empty=<vide>
+dintegrate.gui.value.enabled=Activé
+dintegrate.gui.value.disabled=Désactivé
+dintegrate.gui.value.mode.all=TOUTES
+dintegrate.gui.value.mode.random_one=ALÉATOIRE
+dintegrate.gui.message.empty_credentials=Le token et l'ID utilisateur ne peuvent pas être vides !
+dintegrate.gui.message.settings_saved=Paramètres enregistrés avec succès !
+dintegrate.gui.message.action_deleted=Action supprimée avec succès !
+dintegrate.gui.message.reconnection_initiated=Reconnexion initiée !
+dintegrate.gui.message.enabled=DonateIntegrate activé !
+dintegrate.gui.message.disabled=DonateIntegrate désactivé !
+dintegrate.gui.message.positive_sum=Le montant doit être positif !
+dintegrate.gui.message.negative_priority=La priorité ne peut pas être négative !
+dintegrate.gui.message.no_commands=Au moins une commande est requise !
+dintegrate.gui.message.invalid_number=Format de nombre invalide !
+dintegrate.gui.message.action_added=Action ajoutée !
+dintegrate.gui.message.action_updated=Action mise à jour !
+dintegrate.gui.message.save_error=Erreur lors de l'enregistrement:
+
+# Command Messages
+dintegrate.command.usage=/dpi [gui|set_token <token>|set_userid <userId>|enable|disable|status|reload|reload_config|test <nom> <montant> [message]]
+dintegrate.command.help.title=== Commandes de DonateIntegrate ===
+dintegrate.command.help.gui=/dpi gui - Ouvrir l'interface de configuration
+dintegrate.command.help.set_token=/dpi set_token <token> - Définir le token DonatePay
+dintegrate.command.help.set_userid=/dpi set_userid <userId> - Définir l'ID utilisateur
+dintegrate.command.help.enable=/dpi enable - Activer le traitement des dons
+dintegrate.command.help.disable=/dpi disable - Désactiver le traitement des dons
+dintegrate.command.help.status=/dpi status - Afficher l'état de la configuration
+dintegrate.command.help.reload=/dpi reload - Recharger la connexion
+dintegrate.command.help.reload_config=/dpi reload_config - Recharger la configuration
+dintegrate.command.help.test=/dpi test <nom> <montant> [message] - Tester un don
+dintegrate.command.status.title=== Statut de DonateIntegrate ===
+dintegrate.command.status.enabled=Activé : %s
+dintegrate.command.status.token=Token : %s
+dintegrate.command.status.user_id=ID utilisateur : %s
+dintegrate.command.status.last_donation=ID du dernier don : %d
+dintegrate.command.status.actions=Actions : %d
+dintegrate.command.status.action=- Montant : %s, Activé : %s, Priorité : %s, Mode : %s, Commandes : %s
+dintegrate.command.gui_open=Ouvre l'interface de DonateIntegrate
+dintegrate.command.token_updated=Token DonatePay mis à jour
+dintegrate.command.userid_set=ID utilisateur défini : %s
+dintegrate.command.enabled=DonateIntegrate activé
+dintegrate.command.disabled=DonateIntegrate désactivé
+dintegrate.command.reloaded=Fournisseur de dons rechargé
+dintegrate.command.config_reloaded=Configuration rechargée
+dintegrate.command.test_success=Don de test : %s a donné %s, message : %s, %d commandes ajoutées
+dintegrate.command.error.player_only=Cette commande doit être exécutée par un joueur
+dintegrate.command.error.token_usage=Utilisation : /dpi set_token <token>
+dintegrate.command.error.token_short=Le token est trop court
+dintegrate.command.error.userid_usage=Utilisation : /dpi set_userid <userId>
+dintegrate.command.error.userid_numeric=L'ID utilisateur doit être numérique
+dintegrate.command.error.test_usage=Utilisation : /dpi test <nom> <montant> [message]
+dintegrate.command.error.amount_numeric=Le montant doit être un nombre
+dintegrate.command.error.amount_positive=Le montant doit être positif
+dintegrate.command.error.no_commands=Aucune commande pour le montant : %s
+dintegrate.command.error.no_action=Aucune action active pour le montant : %s
+dintegrate.command.error.internal=Erreur interne : %s
+
+# Key Binding
+key.dintegrate.open_gui=Ouvrir l'interface de DonateIntegrate
+key.categories.dintegrate=DonateIntegrate

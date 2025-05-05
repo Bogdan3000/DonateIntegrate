@@ -1,0 +1,93 @@
+# DonateIntegrate Language File (Russian)
+# GUI Elements
+dintegrate.gui.tab.settings=Настройки
+dintegrate.gui.tab.actions=Действия
+dintegrate.gui.tab.status=Статус
+dintegrate.gui.tab.history=История
+dintegrate.gui.button.save=Сохранить
+dintegrate.gui.button.clear=Очистить
+dintegrate.gui.button.add=Добавить
+dintegrate.gui.button.edit=Редактировать
+dintegrate.gui.button.delete=Удалить
+dintegrate.gui.button.reconnect=Переподключиться
+dintegrate.gui.button.enable=Включить
+dintegrate.gui.button.disable=Отключить
+dintegrate.gui.button.cancel=Отмена
+dintegrate.gui.button.ok=ОК
+dintegrate.gui.label.token=Токен DonatePay:
+dintegrate.gui.label.user_id=ID пользователя:
+dintegrate.gui.label.enabled=Включено:
+dintegrate.gui.label.connected=Подключено:
+dintegrate.gui.label.last_donation_id=ID последнего доната:
+dintegrate.gui.label.actions_configured=Настроено действий:
+dintegrate.gui.label.sum=Сумма:
+dintegrate.gui.label.priority=Приоритет:
+dintegrate.gui.label.commands=Команды:
+dintegrate.gui.label.mode=Режим:
+dintegrate.gui.title.add_action=Добавить действие
+dintegrate.gui.title.edit_action=Редактировать действие
+dintegrate.gui.value.yes=Да
+dintegrate.gui.value.no=Нет
+dintegrate.gui.value.set=Установлен
+dintegrate.gui.value.not_set=Не установлен
+dintegrate.gui.value.empty=<пусто>
+dintegrate.gui.value.enabled=Включено
+dintegrate.gui.value.disabled=Отключено
+dintegrate.gui.value.mode.all=ВСЕ
+dintegrate.gui.value.mode.random_one=СЛУЧАЙНАЯ
+dintegrate.gui.message.empty_credentials=Токен и ID пользователя не могут быть пустыми!
+dintegrate.gui.message.settings_saved=Настройки успешно сохранены!
+dintegrate.gui.message.action_deleted=Действие успешно удалено!
+dintegrate.gui.message.reconnection_initiated=Переподключение начато!
+dintegrate.gui.message.enabled=DonateIntegrate включен!
+dintegrate.gui.message.disabled=DonateIntegrate отключен!
+dintegrate.gui.message.positive_sum=Сумма должна быть положительной!
+dintegrate.gui.message.negative_priority=Приоритет не может быть отрицательным!
+dintegrate.gui.message.no_commands=Необходимо указать хотя бы одну команду!
+dintegrate.gui.message.invalid_number=Неверный формат числа!
+dintegrate.gui.message.action_added=Действие добавлено!
+dintegrate.gui.message.action_updated=Действие обновлено!
+dintegrate.gui.message.save_error=Ошибка при сохранении:
+
+# Command Messages
+dintegrate.command.usage=/dpi [gui|set_token <токен>|set_userid <userId>|enable|disable|status|reload|reload_config|test <имя_игрока> <сумма> [сообщение]]
+dintegrate.command.help.title=== Команды DonateIntegrate ===
+dintegrate.command.help.gui=/dpi gui - Открыть интерфейс настроек
+dintegrate.command.help.set_token=/dpi set_token <токен> - Установить токен DonatePay
+dintegrate.command.help.set_userid=/dpi set_userid <userId> - Установить ID пользователя
+dintegrate.command.help.enable=/dpi enable - Включить обработку донатов
+dintegrate.command.help.disable=/dpi disable - Отключить обработку донатов
+dintegrate.command.help.status=/dpi status - Показать статус конфигурации
+dintegrate.command.help.reload=/dpi reload - Перезагрузить соединение
+dintegrate.command.help.reload_config=/dpi reload_config - Перезагрузить конфигурацию
+dintegrate.command.help.test=/dpi test <имя_игрока> <сумма> [сообщение] - Тестировать донат
+dintegrate.command.status.title=== Статус DonateIntegrate ===
+dintegrate.command.status.enabled=Включено: %s
+dintegrate.command.status.token=Токен: %s
+dintegrate.command.status.user_id=ID пользователя: %s
+dintegrate.command.status.last_donation=ID последнего доната: %d
+dintegrate.command.status.actions=Действия: %d
+dintegrate.command.status.action=- Сумма: %s, Включено: %s, Приоритет: %s, Режим: %s, Команд: %s
+dintegrate.command.gui_open=Открытие интерфейса DonateIntegrate
+dintegrate.command.token_updated=Токен DonatePay обновлен
+dintegrate.command.userid_set=ID пользователя установлен: %s
+dintegrate.command.enabled=DonateIntegrate включен
+dintegrate.command.disabled=DonateIntegrate отключен
+dintegrate.command.reloaded=Провайдер донатов перезагружен
+dintegrate.command.config_reloaded=Конфигурация перезагружена
+dintegrate.command.test_success=Тестовый донат: %s пожертвовал %s, сообщение: %s, добавлено %d команд
+dintegrate.command.error.player_only=Эта команда должна выполняться игроком
+dintegrate.command.error.token_usage=Использование: /dpi set_token <токен>
+dintegrate.command.error.token_short=Токен слишком короткий
+dintegrate.command.error.userid_usage=Использование: /dpi set_userid <userId>
+dintegrate.command.error.userid_numeric=ID пользователя должен быть числовым
+dintegrate.command.error.test_usage=Использование: /dpi test <имя_игрока> <сумма> [сообщение]
+dintegrate.command.error.amount_numeric=Сумма должна быть числом
+dintegrate.command.error.amount_positive=Сумма должна быть положительной
+dintegrate.command.error.no_commands=Нет команд для суммы: %s
+dintegrate.command.error.no_action=Нет активных действий для суммы: %s
+dintegrate.command.error.internal=Внутренняя ошибка: %s
+
+# Key Binding
+key.dintegrate.open_gui=Открыть интерфейс DonateIntegrate
+key.categories.dintegrate=DonateIntegrate
