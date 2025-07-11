@@ -24,8 +24,8 @@ import java.util.function.Consumer;
  * Implementation of DonationProvider for DonatePay service using WebSocket.
  */
 public class DonatePayProvider implements DonationProvider {
-    private static final String WS_URL = "wss://centrifugo.donatepay.ru:43002/connection/websocket";
-    private static final String API_URL = "https://donatepay.ru/api/v2/socket/token";
+
+
     private static final Gson GSON = new Gson();
 
     private WebSocketClient socket;
@@ -60,9 +60,9 @@ public class DonatePayProvider implements DonationProvider {
                 return;
             }
 
-            URI serverUri = new URI(WS_URL);
+            URI serverUri = new URI(ConfigHandler.getConfig().getDonpayWebSocketUrl());
             Map<String, String> headers = new HashMap<>();
-            headers.put("User-Agent", "Minecraft-DonateIntegrate/2.0.3");
+            headers.put("User-Agent", "Minecraft-DonateIntegrate/2.0.5");
 
             socket = new DonatePayWebSocket(serverUri, token, connectionToken, headers);
             socket.setConnectionLostTimeout(30);
@@ -121,12 +121,12 @@ public class DonatePayProvider implements DonationProvider {
 
     private String getConnectionToken(String accessToken) {
         try {
-            URL url = new URL(API_URL + "?access_token=" + accessToken);
+            URL url = new URL(ConfigHandler.getConfig().getDonpayApiUrl() + "?access_token=" + accessToken);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.3");
+            conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.5");
             conn.setDoOutput(true);
 
             JsonObject payload = new JsonObject();
@@ -324,12 +324,12 @@ public class DonatePayProvider implements DonationProvider {
                 channels.add(channel);
                 payload.add("channels", channels);
 
-                URL url = new URL(API_URL + "?access_token=" + accessToken);
+                URL url = new URL(ConfigHandler.getConfig().getDonpayApiUrl() + "?access_token=" + accessToken);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Accept", "application/json");
-                conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.3");
+                conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.5");
                 conn.setDoOutput(true);
 
                 try (java.io.OutputStream os = conn.getOutputStream()) {

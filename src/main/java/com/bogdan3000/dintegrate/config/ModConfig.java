@@ -9,6 +9,8 @@ public class ModConfig {
     private String donpayToken = "";
     private String userId = "";
     private int lastDonate = 0;
+    private String donpayWebSocketUrl = "wss://centrifugo.donatepay.ru:443/connection/websocket";
+    private String donpayApiUrl = "https://donatepay.ru/api/v2/socket/token";
     private List<Action> actions = new ArrayList<>();
 
     public ModConfig() {
@@ -26,6 +28,7 @@ public class ModConfig {
                 20.0f,
                 true,
                 2,
+
                 Arrays.asList(
                         "/give @s emerald 5",
                         "/effect @s speed 30 1",
@@ -47,6 +50,18 @@ public class ModConfig {
     public void setUserId(String userId) {
         this.userId = userId != null ? userId : "";
     }
+
+    public String getDonpayWebSocketUrl() {
+        return donpayWebSocketUrl;
+    }
+    public void setDonpayWebSocketUrl(String donpayWebSocketUrl) {
+        this.donpayWebSocketUrl = donpayWebSocketUrl;
+    }
+
+    public String getDonpayApiUrl() {
+        return donpayApiUrl;
+    }
+    public void setDonpayApiUrl(String donpayApiUrl) {this.donpayApiUrl = donpayApiUrl;}
 
     public int getLastDonate() { return lastDonate; }
     public void setLastDonate(int lastDonate) {

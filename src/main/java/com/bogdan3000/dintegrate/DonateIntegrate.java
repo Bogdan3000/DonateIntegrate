@@ -25,7 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "2.0.3", clientSideOnly = true)
+@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "2.0.5", clientSideOnly = true)
 @SideOnly(Side.CLIENT)
 public class DonateIntegrate {
     public static final String MOD_ID = "dintegrate";
