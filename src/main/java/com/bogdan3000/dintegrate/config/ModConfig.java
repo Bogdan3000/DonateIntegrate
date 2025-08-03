@@ -28,7 +28,6 @@ public class ModConfig {
                 20.0f,
                 true,
                 2,
-
                 Arrays.asList(
                         "/give @s emerald 5",
                         "/effect @s speed 30 1",
@@ -54,6 +53,7 @@ public class ModConfig {
     public String getDonpayWebSocketUrl() {
         return donpayWebSocketUrl;
     }
+    @SuppressWarnings("unused")
     public void setDonpayWebSocketUrl(String donpayWebSocketUrl) {
         this.donpayWebSocketUrl = donpayWebSocketUrl;
     }
@@ -61,7 +61,10 @@ public class ModConfig {
     public String getDonpayApiUrl() {
         return donpayApiUrl;
     }
-    public void setDonpayApiUrl(String donpayApiUrl) {this.donpayApiUrl = donpayApiUrl;}
+    @SuppressWarnings("unused")
+    public void setDonpayApiUrl(String donpayApiUrl) {
+        this.donpayApiUrl = donpayApiUrl;
+    }
 
     public int getLastDonate() { return lastDonate; }
     public void setLastDonate(int lastDonate) {
@@ -69,6 +72,7 @@ public class ModConfig {
     }
 
     public List<Action> getActions() { return actions; }
+    @SuppressWarnings("unused")
     public void setActions(List<Action> actions) {
         this.actions = actions != null ? new ArrayList<>(actions) : new ArrayList<>();
     }

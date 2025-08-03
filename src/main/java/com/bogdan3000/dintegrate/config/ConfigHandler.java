@@ -23,12 +23,12 @@ public class ConfigHandler {
             cachedConfig = new ModConfig();
             save();
         } else {
-            load();
+            load(); // Изменено: просто вызываем load(), так как возвращаемое значение не используется
         }
         lastModified = configFile.lastModified();
     }
 
-    public static ModConfig load() {
+    public static void load() { // Изменено: возвращаемый тип изменен на void
         try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
             ModConfig config = YAML.loadAs(reader, ModConfig.class);
             if (config == null || !isValid(config)) {
@@ -39,12 +39,10 @@ public class ConfigHandler {
             lastModified = configFile.lastModified();
             DonateIntegrate.LOGGER.debug("Загружена конфигурация: token={}, userId={}",
                     maskToken(config.getDonpayToken()), config.getUserId());
-            return config;
         } catch (Exception e) {
             DonateIntegrate.LOGGER.error("Ошибка загрузки конфигурации: {}", e.getMessage());
             cachedConfig = new ModConfig();
             save();
-            return cachedConfig;
         }
     }
 

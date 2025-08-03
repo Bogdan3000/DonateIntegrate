@@ -14,22 +14,27 @@ import net.minecraft.util.text.Style;
 import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.util.text.TextFormatting;
 
+import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 public class DPICommand extends CommandBase {
+
     @Override
+    @Nonnull
     public String getName() {
         return "dpi";
     }
 
     @Override
-    public String getUsage(ICommandSender sender) {
+    @Nonnull
+    public String getUsage(@Nonnull ICommandSender sender) {
         return I18n.format("dintegrate.command.usage");
     }
 
     @Override
-    public void execute(MinecraftServer server, ICommandSender sender, String[] args) throws CommandException {
+    public void execute(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, @Nonnull String[] args) throws CommandException {
         if (args.length == 0) {
             showHelp(sender);
             return;
@@ -117,7 +122,7 @@ public class DPICommand extends CommandBase {
         }
     }
 
-    private void showHelp(ICommandSender sender) {
+    private void showHelp(@Nonnull ICommandSender sender) {
         sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.title").setStyle(new Style().setColor(TextFormatting.YELLOW)));
         sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.gui"));
         sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.set_token"));
@@ -130,7 +135,7 @@ public class DPICommand extends CommandBase {
         sender.sendMessage(new TextComponentTranslation("dintegrate.command.help.test"));
     }
 
-    private void showStatus(ICommandSender sender, ModConfig config) {
+    private void showStatus(@Nonnull ICommandSender sender, @Nonnull ModConfig config) {
         sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.title").setStyle(new Style().setColor(TextFormatting.YELLOW)));
         sender.sendMessage(new TextComponentTranslation("dintegrate.command.status.enabled",
                 config.isEnabled() ? I18n.format("dintegrate.gui.value.yes") : I18n.format("dintegrate.gui.value.no"))
@@ -156,16 +161,17 @@ public class DPICommand extends CommandBase {
         }
     }
 
-    private String maskToken(String token) {
+    @Nonnull
+    private String maskToken(@Nonnull String token) {
         if (token.isEmpty()) return I18n.format("dintegrate.gui.value.empty");
         if (token.length() <= 10) return token;
         return token.substring(0, 4) + "..." + token.substring(token.length() - 4);
     }
 
-    private void testDonation(ICommandSender sender, String username, float amount, String message) {
+    private void testDonation(@Nonnull ICommandSender sender, @Nonnull String username, float amount, @Nonnull String message) {
         ModConfig config = ConfigHandler.getConfig();
         boolean actionFound = false;
-        java.util.Random random = new java.util.Random();
+        Random random = new Random();
 
         for (com.bogdan3000.dintegrate.config.Action action : config.getActions()) {
             if (Math.abs(action.getSum() - amount) < 0.001 && action.isEnabled()) {

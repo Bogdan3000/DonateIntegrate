@@ -15,6 +15,7 @@ public class Action {
         RANDOM_ONE
     }
 
+    @SuppressWarnings("unused")
     public Action() {
         this.sum = 0.0f;
         this.enabled = true;
@@ -34,26 +35,35 @@ public class Action {
     }
 
     public float getSum() { return sum; }
+
+    @SuppressWarnings("unused")
     public void setSum(float sum) {
         if (sum <= 0) throw new IllegalArgumentException("Сумма должна быть положительной");
         this.sum = sum;
     }
 
     public boolean isEnabled() { return enabled; }
+
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     public int getPriority() { return priority; }
+
+    @SuppressWarnings("unused")
     public void setPriority(int priority) {
         if (priority < 0) throw new IllegalArgumentException("Приоритет не может быть отрицательным");
         this.priority = priority;
     }
 
     public List<String> getCommands() { return commands; }
+
+    @SuppressWarnings("unused")
     public void setCommands(List<String> commands) {
         this.commands = commands != null ? new ArrayList<>(commands) : new ArrayList<>();
     }
 
     public ExecutionMode getExecutionMode() { return executionMode; }
+
+    @SuppressWarnings("unused")
     public void setExecutionMode(ExecutionMode executionMode) {
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.ALL;
     }

@@ -34,9 +34,7 @@ public class NetworkHandler {
             @Override
             public IMessage onMessage(OpenGuiMessage message, MessageContext ctx) {
                 if (ctx.side == Side.CLIENT) {
-                    Minecraft.getMinecraft().addScheduledTask(() -> {
-                        Minecraft.getMinecraft().displayGuiScreen(new DonateIntegrateGui());
-                    });
+                    Minecraft.getMinecraft().addScheduledTask(() -> Minecraft.getMinecraft().displayGuiScreen(new DonateIntegrateGui()));
                 }
                 return null;
             }
