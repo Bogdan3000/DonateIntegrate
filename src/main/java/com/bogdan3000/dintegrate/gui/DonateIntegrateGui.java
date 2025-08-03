@@ -3,7 +3,6 @@ package com.bogdan3000.dintegrate.gui;
 import com.bogdan3000.dintegrate.DonateIntegrate;
 import com.bogdan3000.dintegrate.config.Action;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
-import com.bogdan3000.dintegrate.config.ModConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
@@ -18,24 +17,17 @@ import org.lwjgl.opengl.GL11;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 public class DonateIntegrateGui extends GuiScreen {
-    private static final int TAB_WIDTH = 60;
-    private static final int TAB_HEIGHT = 40;
-    private static final int CONTENT_MARGIN = 20;
-    private static final int CONTENT_WIDTH = 400;
-    private static final int CONTENT_HEIGHT = 300;
-    private static final int TAB_COUNT = 4;
-    private static final int ACTION_ITEM_HEIGHT = 30;
-    private static final int ACTION_LIST_HEIGHT = 180;
-
-    private int contentLeft, contentTop;
-    private int currentTab = 0;
+    private static final int TAB_WIDTH = 100;
+    private static final int TAB_HEIGHT = 30;
+    private static final int TAB_SPACING = 4;
+    private static final int CONTENT_MARGIN = 10;
+    private static final int ACTION_ITEM_HEIGHT = 50;
+    private int windowLeft, windowTop, windowWidth, windowHeight;
+    private int currentTab = 1; // Default to Actions tab
     private float fadeAnimation = 0.0f;
     private final List<TabButton> tabButtons = new ArrayList<>();
-    private final List<String> donationHistory = new CopyOnWriteArrayList<>();
-
     private ObfuscatedTextField tokenField;
     private GuiTextField userIdField;
     private CustomButton saveSettingsButton;
@@ -48,8 +40,6 @@ public class DonateIntegrateGui extends GuiScreen {
     private int selectedActionIndex = -1;
     private float scrollOffset = 0.0f;
     private boolean isDraggingScrollbar = false;
-    private int scrollbarHeight = 20;
-    private int scrollbarTop;
 
     @Override
     public void initGui() {
@@ -59,39 +49,47 @@ public class DonateIntegrateGui extends GuiScreen {
         fadeAnimation = 0.0f;
         selectedActionIndex = -1;
         scrollOffset = 0.0f;
-        currentTab = 1; // Default to Actions tab instead of Settings
 
-        contentLeft = (width - CONTENT_WIDTH) / 2;
-        contentTop = (height - CONTENT_HEIGHT) / 2;
+        // Calculate window dimensions
+        ScaledResolution scaled = new ScaledResolution(mc);
+        windowWidth = (int) (width * 0.75);
+        windowHeight = height - 40;
+        windowLeft = TAB_WIDTH + CONTENT_MARGIN;
+        windowTop = 20;
 
-        for (int i = 0; i < TAB_COUNT; i++) {
-            TabButton tabButton = new TabButton(i, CONTENT_MARGIN, CONTENT_MARGIN + i * (TAB_HEIGHT + 10), TAB_WIDTH, TAB_HEIGHT, I18n.format("dintegrate.gui.tab." + getTabKey(i)));
+        // Initialize tabs (vertical with spacing)
+        String[] tabNames = {"settings", "actions", "status", "history"};
+        for (int i = 0; i < tabNames.length; i++) {
+            TabButton tabButton = new TabButton(i, CONTENT_MARGIN, 20 + i * (TAB_HEIGHT + TAB_SPACING), TAB_WIDTH, TAB_HEIGHT, I18n.format("dintegrate.gui.tab." + tabNames[i]));
             buttonList.add(tabButton);
             tabButtons.add(tabButton);
         }
 
-        tokenField = new ObfuscatedTextField(100, fontRenderer, contentLeft + 20, contentTop + 60, CONTENT_WIDTH - 40, 20);
+        // Settings tab fields
+        tokenField = new ObfuscatedTextField(100, fontRenderer, windowLeft + CONTENT_MARGIN, windowTop + 50, windowWidth - 2 * CONTENT_MARGIN, 20);
         tokenField.setMaxStringLength(100);
         tokenField.setText(ConfigHandler.getConfig().getDonpayToken());
-        userIdField = new GuiTextField(101, fontRenderer, contentLeft + 20, contentTop + 110, CONTENT_WIDTH - 40, 20);
+        userIdField = new GuiTextField(101, fontRenderer, windowLeft + CONTENT_MARGIN, windowTop + 100, windowWidth - 2 * CONTENT_MARGIN, 20);
         userIdField.setMaxStringLength(20);
         userIdField.setText(ConfigHandler.getConfig().getUserId());
-        saveSettingsButton = new CustomButton(102, contentLeft + 20, contentTop + CONTENT_HEIGHT - 60, 100, 24, I18n.format("dintegrate.gui.button.save"));
-        clearSettingsButton = new CustomButton(103, contentLeft + CONTENT_WIDTH - 120, contentTop + CONTENT_HEIGHT - 60, 100, 24, I18n.format("dintegrate.gui.button.clear"));
+        saveSettingsButton = new CustomButton(102, windowLeft + CONTENT_MARGIN, windowTop + windowHeight - 40, 100, 24, I18n.format("dintegrate.gui.button.save"));
+        clearSettingsButton = new CustomButton(103, windowLeft + windowWidth - CONTENT_MARGIN - 100, windowTop + windowHeight - 40, 100, 24, I18n.format("dintegrate.gui.button.clear"));
         buttonList.add(saveSettingsButton);
         buttonList.add(clearSettingsButton);
 
-        addActionButton = new CustomButton(104, contentLeft + 20, contentTop + CONTENT_HEIGHT - 60, 80, 24, I18n.format("dintegrate.gui.button.add"));
-        editActionButton = new CustomButton(105, contentLeft + 110, contentTop + CONTENT_HEIGHT - 60, 80, 24, I18n.format("dintegrate.gui.button.edit"));
+        // Actions tab buttons
+        addActionButton = new CustomButton(104, windowLeft + CONTENT_MARGIN, windowTop + windowHeight - 40, 80, 24, I18n.format("dintegrate.gui.button.add"));
+        editActionButton = new CustomButton(105, windowLeft + CONTENT_MARGIN + 90, windowTop + windowHeight - 40, 80, 24, I18n.format("dintegrate.gui.button.edit"));
         editActionButton.enabled = false;
-        deleteActionButton = new CustomButton(106, contentLeft + 200, contentTop + CONTENT_HEIGHT - 60, 80, 24, I18n.format("dintegrate.gui.button.delete"));
+        deleteActionButton = new CustomButton(106, windowLeft + CONTENT_MARGIN + 180, windowTop + windowHeight - 40, 80, 24, I18n.format("dintegrate.gui.button.delete"));
         deleteActionButton.enabled = false;
         buttonList.add(addActionButton);
         buttonList.add(editActionButton);
         buttonList.add(deleteActionButton);
 
-        reconnectButton = new CustomButton(107, contentLeft + 20, contentTop + CONTENT_HEIGHT - 60, 100, 24, I18n.format("dintegrate.gui.button.reconnect"));
-        enableToggleButton = new CustomButton(108, contentLeft + CONTENT_WIDTH - 120, contentTop + CONTENT_HEIGHT - 60, 100, 24,
+        // Status tab buttons
+        reconnectButton = new CustomButton(107, windowLeft + CONTENT_MARGIN, windowTop + windowHeight - 40, 100, 24, I18n.format("dintegrate.gui.button.reconnect"));
+        enableToggleButton = new CustomButton(108, windowLeft + windowWidth - CONTENT_MARGIN - 100, windowTop + windowHeight - 40, 100, 24,
                 ConfigHandler.getConfig().isEnabled() ? I18n.format("dintegrate.gui.button.disable") : I18n.format("dintegrate.gui.button.enable"));
         buttonList.add(reconnectButton);
         buttonList.add(enableToggleButton);
@@ -99,26 +97,14 @@ public class DonateIntegrateGui extends GuiScreen {
         updateTabVisibility();
     }
 
-    private String getTabKey(int index) {
-        switch (index) {
-            case 0: return "settings";
-            case 1: return "actions";
-            case 2: return "status";
-            case 3: return "history";
-            default: return "";
-        }
-    }
-
     private void updateTabVisibility() {
         tokenField.setVisible(currentTab == 0);
         userIdField.setVisible(currentTab == 0);
         saveSettingsButton.visible = currentTab == 0;
         clearSettingsButton.visible = currentTab == 0;
-
         addActionButton.visible = currentTab == 1;
         editActionButton.visible = currentTab == 1;
         deleteActionButton.visible = currentTab == 1;
-
         reconnectButton.visible = currentTab == 2;
         enableToggleButton.visible = currentTab == 2;
     }
@@ -135,37 +121,36 @@ public class DonateIntegrateGui extends GuiScreen {
             return;
         }
 
-        ModConfig config = ConfigHandler.getConfig();
         switch (button.id) {
-            case 102:
+            case 102: // Save settings
                 String token = tokenField.getText().trim();
                 String userId = userIdField.getText().trim();
                 if (token.isEmpty() || userId.isEmpty()) {
                     mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.empty_credentials"), false));
                     return;
                 }
-                config.setDonpayToken(token);
-                config.setUserId(userId);
+                ConfigHandler.getConfig().setDonpayToken(token);
+                ConfigHandler.getConfig().setUserId(userId);
                 ConfigHandler.save();
                 DonateIntegrate.startDonationProvider();
                 mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.settings_saved"), true));
                 break;
-            case 103:
+            case 103: // Clear settings
                 tokenField.setText("");
                 userIdField.setText("");
                 break;
-            case 104:
+            case 104: // Add action
                 mc.displayGuiScreen(new ActionEditGui(this, null));
                 break;
-            case 105:
-                if (selectedActionIndex >= 0 && selectedActionIndex < config.getActions().size()) {
-                    Action action = config.getActions().get(selectedActionIndex);
+            case 105: // Edit action
+                if (selectedActionIndex >= 0 && selectedActionIndex < ConfigHandler.getConfig().getActions().size()) {
+                    Action action = ConfigHandler.getConfig().getActions().get(selectedActionIndex);
                     mc.displayGuiScreen(new ActionEditGui(this, action));
                 }
                 break;
-            case 106:
-                if (selectedActionIndex >= 0 && selectedActionIndex < config.getActions().size()) {
-                    config.getActions().remove(selectedActionIndex);
+            case 106: // Delete action
+                if (selectedActionIndex >= 0 && selectedActionIndex < ConfigHandler.getConfig().getActions().size()) {
+                    ConfigHandler.getConfig().getActions().remove(selectedActionIndex);
                     ConfigHandler.save();
                     selectedActionIndex = -1;
                     editActionButton.enabled = false;
@@ -173,47 +158,44 @@ public class DonateIntegrateGui extends GuiScreen {
                     mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.action_deleted"), true));
                 }
                 break;
-            case 107:
+            case 107: // Reconnect
                 DonateIntegrate.startDonationProvider();
                 mc.displayGuiScreen(new MessageGui(this, I18n.format("dintegrate.gui.message.reconnection_initiated"), true));
                 break;
-            case 108:
-                config.setEnabled(!config.isEnabled());
+            case 108: // Enable/Disable
+                ConfigHandler.getConfig().setEnabled(!ConfigHandler.getConfig().isEnabled());
                 ConfigHandler.save();
-                enableToggleButton.displayString = config.isEnabled() ? I18n.format("dintegrate.gui.button.disable") : I18n.format("dintegrate.gui.button.enable");
-                if (config.isEnabled()) {
+                enableToggleButton.displayString = ConfigHandler.getConfig().isEnabled() ? I18n.format("dintegrate.gui.button.disable") : I18n.format("dintegrate.gui.button.enable");
+                if (ConfigHandler.getConfig().isEnabled()) {
                     DonateIntegrate.startDonationProvider();
                 } else {
                     DonateIntegrate.stopDonationProvider();
                 }
-                mc.displayGuiScreen(new MessageGui(this, I18n.format(config.isEnabled() ? "dintegrate.gui.message.enabled" : "dintegrate.gui.message.disabled"), true));
+                mc.displayGuiScreen(new MessageGui(this, I18n.format(ConfigHandler.getConfig().isEnabled() ? "dintegrate.gui.message.enabled" : "dintegrate.gui.message.disabled"), true));
                 break;
         }
     }
-
-    // ... (Other methods remain unchanged, except for drawScreen)
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         GlStateManager.enableBlend();
         GlStateManager.color(1.0f, 1.0f, 1.0f, fadeAnimation);
         GuiRenderUtils.drawOverlay(width, height);
+        GuiRenderUtils.drawRoundedRect(windowLeft, windowTop, windowWidth, windowHeight, 8, 0xFF263238);
 
-        GuiRenderUtils.drawRoundedRect(contentLeft, contentTop, CONTENT_WIDTH, CONTENT_HEIGHT, 8, 0xFF263238);
-        fontRenderer.drawString(I18n.format("dintegrate.gui.tab." + getTabKey(currentTab)), contentLeft + 20, contentTop + 20, GuiRenderUtils.getTextColor());
-
+        // Draw content area
         switch (currentTab) {
-            case 0:
-                drawSettingsTab(mouseX, mouseY, partialTicks);
+            case 0: // Settings
+                drawSettingsTab();
                 break;
-            case 1:
+            case 1: // Actions
                 drawActionsTab(mouseX, mouseY, partialTicks);
                 break;
-            case 2:
-                drawStatusTab(mouseX, mouseY, partialTicks);
+            case 2: // Status
+                drawStatusTab();
                 break;
-            case 3:
-                drawHistoryTab(mouseX, mouseY, partialTicks);
+            case 3: // History
+                drawHistoryTab();
                 break;
         }
 
@@ -221,184 +203,145 @@ public class DonateIntegrateGui extends GuiScreen {
         GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    private void drawSettingsTab(int mouseX, int mouseY, float partialTicks) {
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.token"), contentLeft + 20, contentTop + 50, GuiRenderUtils.getTextColor());
+    private void drawSettingsTab() {
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.token"), windowLeft + CONTENT_MARGIN, windowTop + 40, GuiRenderUtils.getTextColor());
         tokenField.drawTextBox();
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.user_id"), contentLeft + 20, contentTop + 100, GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.user_id"), windowLeft + CONTENT_MARGIN, windowTop + 90, GuiRenderUtils.getTextColor());
         userIdField.drawTextBox();
     }
 
     private void drawActionsTab(int mouseX, int mouseY, float partialTicks) {
         List<Action> actions = ConfigHandler.getConfig().getActions();
-        int listTop = contentTop + 60;
-        int listLeft = contentLeft + 20;
-        int listWidth = CONTENT_WIDTH - 40;
-        int maxItems = ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT;
+        int listTop = windowTop + CONTENT_MARGIN;
+        int listLeft = windowLeft + CONTENT_MARGIN;
+        int listWidth = windowWidth - 2 * CONTENT_MARGIN;
+        int listHeight = windowHeight - 60;
 
-        // Draw list background
-        GuiRenderUtils.drawRoundedRect(listLeft, listTop, listWidth, ACTION_LIST_HEIGHT, 4, 0xFF37474F);
+        // Подсчёт полной высоты
+        int totalHeight = 0;
+        for (Action a : actions) {
+            totalHeight += 28 + a.getCommands().size() * 22;
+        }
 
-        // Enable scissor test for clipping
+        GuiRenderUtils.drawRoundedRect(listLeft, listTop, listWidth, listHeight, 4, 0xFF37474F);
+
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
         int scaleFactor = new ScaledResolution(mc).getScaleFactor();
-        GL11.glScissor((listLeft * scaleFactor), (height - listTop - ACTION_LIST_HEIGHT) * scaleFactor,
-                (listWidth * scaleFactor), (ACTION_LIST_HEIGHT * scaleFactor));
+        GL11.glScissor(listLeft * scaleFactor, (height - listTop - listHeight) * scaleFactor, listWidth * scaleFactor, listHeight * scaleFactor);
 
-        // Draw action items
+        int yPos = listTop;
         for (int i = 0; i < actions.size(); i++) {
-            int y = listTop + i * ACTION_ITEM_HEIGHT - (int) scrollOffset;
-            if (y + ACTION_ITEM_HEIGHT < listTop || y > listTop + ACTION_LIST_HEIGHT) continue;
-
             Action action = actions.get(i);
-            int color = i == selectedActionIndex ? GuiRenderUtils.mixColors(0xFF37474F, 0xFF0288D1, 0.5f) : 0xFF37474F;
-            GuiRenderUtils.drawRoundedRect(listLeft + 2, y + 2, listWidth - 4, ACTION_ITEM_HEIGHT - 4, 4, color);
+            int commandCount = action.getCommands().size();
+            int itemHeight = 28 + commandCount * 22;
+            int y = yPos - (int) scrollOffset;
 
-            String text = String.format("Sum: %.2f, Commands: %d, %s, Priority: %d",
-                    action.getSum(), action.getCommands().size(),
-                    action.isEnabled() ? "Enabled" : "Disabled", action.getPriority());
-            fontRenderer.drawString(text, listLeft + 8, y + 10, GuiRenderUtils.getTextColor());
+            if (y + itemHeight < listTop || y > listTop + listHeight) {
+                yPos += itemHeight;
+                continue;
+            }
+
+            boolean hovered = mouseX >= listLeft && mouseX <= listLeft + listWidth && mouseY >= y && mouseY <= y + itemHeight;
+            boolean selected = i == selectedActionIndex;
+            int baseColor = 0xFF37474F;
+            int backgroundColor = selected ? 0xFF0288D1 : (hovered ? 0xFF546E7A : baseColor);
+            int commandBackgroundColor = selected ? 0xFF0288D1 : (hovered ? 0xFF78909C : 0xFF455A64);
+
+            GuiRenderUtils.drawRoundedRect(listLeft + 1, y + 1, listWidth - 2, itemHeight - 2, 4, 0xFF263238);
+            GuiRenderUtils.drawRoundedRect(listLeft + 2, y + 2, listWidth - 4, itemHeight - 4, 4, backgroundColor);
+
+            String text = String.format("%s: %.2f, %s: %d, %s, %s: %d",
+                    I18n.format("dintegrate.gui.label.sum"), action.getSum(),
+                    I18n.format("dintegrate.gui.label.commands"), commandCount,
+                    action.isEnabled() ? I18n.format("dintegrate.gui.value.enabled") : I18n.format("dintegrate.gui.value.disabled"),
+                    I18n.format("dintegrate.gui.label.priority"), action.getPriority());
+            fontRenderer.drawString(text, listLeft + 8, y + 8, GuiRenderUtils.getTextColor());
+
+            int commandY = y + 28;
+            for (String command : action.getCommands()) {
+                String cmd = command.length() > 50 ? command.substring(0, 47) + "..." : command;
+                GuiRenderUtils.drawRoundedRect(listLeft + 8, commandY, listWidth - 16, 20, 2, commandBackgroundColor);
+                GuiRenderUtils.drawRoundedRect(listLeft + 8, commandY, listWidth - 16, 20, 2, 0xFF78909C);
+                fontRenderer.drawString(cmd, listLeft + 12, commandY + 4, GuiRenderUtils.getTextColor());
+                commandY += 22;
+            }
+
+            yPos += itemHeight;
         }
 
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
-        // Draw scrollbar
-        if (actions.size() > maxItems) {
-            int maxScroll = (actions.size() - maxItems) * ACTION_ITEM_HEIGHT;
-            float scrollRatio = scrollOffset / (maxScroll > 0 ? maxScroll : 1);
-            scrollbarHeight = Math.max(20, ACTION_LIST_HEIGHT * maxItems / actions.size());
-            scrollbarTop = listTop + (int) ((ACTION_LIST_HEIGHT - scrollbarHeight) * scrollRatio);
-            int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
-            GuiRenderUtils.drawRoundedRect(scrollbarLeft, scrollbarTop, 10, scrollbarHeight, 4, 0xFF546E7A);
+        // Scrollbar
+        if (totalHeight > listHeight) {
+            int maxScroll = totalHeight - listHeight;
+            float scrollRatio = scrollOffset / (float) maxScroll;
+            int scrollbarHeight = Math.max(20, listHeight * listHeight / totalHeight);
+            int scrollbarTop = listTop + (int) ((listHeight - scrollbarHeight) * scrollRatio);
+            GuiRenderUtils.drawRoundedRect(windowLeft + windowWidth - CONTENT_MARGIN - 10, scrollbarTop, 10, scrollbarHeight, 4, 0xFF546E7A);
         }
     }
 
-    private void drawStatusTab(int mouseX, int mouseY, float partialTicks) {
-        ModConfig config = ConfigHandler.getConfig();
-        int y = contentTop + 60;
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.enabled") + (config.isEnabled() ? I18n.format("dintegrate.gui.value.yes") : I18n.format("dintegrate.gui.value.no")), contentLeft + 20, y,
-                config.isEnabled() ? 0xFF4CAF50 : GuiRenderUtils.getErrorColor());
+    private void drawStatusTab() {
+        int y = windowTop + CONTENT_MARGIN;
+        int x = windowLeft + CONTENT_MARGIN;
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.enabled") + ": " +
+                        (ConfigHandler.getConfig().isEnabled() ? I18n.format("dintegrate.gui.value.yes") : I18n.format("dintegrate.gui.value.no")),
+                x, y, ConfigHandler.getConfig().isEnabled() ? 0xFF4CAF50 : GuiRenderUtils.getErrorColor());
         y += 20;
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.connected") + (DonateIntegrate.getInstance().getDonationProvider().isConnected() ? I18n.format("dintegrate.gui.value.yes") : I18n.format("dintegrate.gui.value.no")),
-                contentLeft + 20, y, DonateIntegrate.getInstance().getDonationProvider().isConnected() ? 0xFF4CAF50 : GuiRenderUtils.getErrorColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.connected") + ": " +
+                        (DonateIntegrate.getInstance().getDonationProvider().isConnected() ? I18n.format("dintegrate.gui.value.yes") : I18n.format("dintegrate.gui.value.no")),
+                x, y, DonateIntegrate.getInstance().getDonationProvider().isConnected() ? 0xFF4CAF50 : GuiRenderUtils.getErrorColor());
         y += 20;
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.last_donation_id") + config.getLastDonate(), contentLeft + 20, y, GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.last_donation_id") + ": " + ConfigHandler.getConfig().getLastDonate(),
+                x, y, GuiRenderUtils.getTextColor());
         y += 20;
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.token") + (config.getDonpayToken().isEmpty() ? I18n.format("dintegrate.gui.value.not_set") : I18n.format("dintegrate.gui.value.set")), contentLeft + 20, y,
-                config.getDonpayToken().isEmpty() ? GuiRenderUtils.getErrorColor() : 0xFF4CAF50);
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.token") + ": " +
+                        (ConfigHandler.getConfig().getDonpayToken().isEmpty() ? I18n.format("dintegrate.gui.value.not_set") : I18n.format("dintegrate.gui.value.set")),
+                x, y, ConfigHandler.getConfig().getDonpayToken().isEmpty() ? GuiRenderUtils.getErrorColor() : 0xFF4CAF50);
         y += 20;
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.user_id") + (config.getUserId().isEmpty() ? I18n.format("dintegrate.gui.value.not_set") : config.getUserId()), contentLeft + 20, y,
-                config.getUserId().isEmpty() ? GuiRenderUtils.getErrorColor() : GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.user_id") + ": " +
+                        (ConfigHandler.getConfig().getUserId().isEmpty() ? I18n.format("dintegrate.gui.value.not_set") : ConfigHandler.getConfig().getUserId()),
+                x, y, ConfigHandler.getConfig().getUserId().isEmpty() ? GuiRenderUtils.getErrorColor() : GuiRenderUtils.getTextColor());
         y += 20;
-        fontRenderer.drawString(I18n.format("dintegrate.gui.label.actions_configured") + config.getActions().size(), contentLeft + 20, y, GuiRenderUtils.getTextColor());
+        fontRenderer.drawString(I18n.format("dintegrate.gui.label.actions_configured") + ": " + ConfigHandler.getConfig().getActions().size(),
+                x, y, GuiRenderUtils.getTextColor());
     }
 
-    private void drawHistoryTab(int mouseX, int mouseY, float partialTicks) {
-        int y = contentTop + 60;
-        for (int i = 0; i < donationHistory.size() && y < contentTop + CONTENT_HEIGHT - 40; i++) {
-            fontRenderer.drawString(donationHistory.get(i), contentLeft + 20, y, GuiRenderUtils.getTextColor());
-            y += 20;
-        }
+    private void drawHistoryTab() {
+        fontRenderer.drawString("History not implemented yet", windowLeft + CONTENT_MARGIN, windowTop + CONTENT_MARGIN, GuiRenderUtils.getTextColor());
     }
 
-    @Override
-    public void onGuiClosed() {
-        Keyboard.enableRepeatEvents(false);
-    }
-
-    public Minecraft getMinecraft() {
-        return mc;
-    }
-
-    /**
-     * Custom tab button with vertical layout and animations.
-     */
-    private static class TabButton extends GuiButton {
-        private float hoverAnimation = 0.0f;
-        private boolean wasHovered = false;
-
-        public TabButton(int buttonId, int x, int y, int width, int height, String buttonText) {
-            super(buttonId, x, y, width, height, buttonText);
-        }
-
-        @Override
-        public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
-            if (!visible) return;
-
-            boolean hovered = mouseX >= x && mouseY >= y && mouseX < x + width && mouseY < y + height;
-            if (hovered && !wasHovered) hoverAnimation = 0.0f;
-            if (!hovered && wasHovered) hoverAnimation = 1.0f;
-            hoverAnimation = hovered ? Math.min(1.0f, hoverAnimation + partialTicks * 0.2f) :
-                    Math.max(0.0f, hoverAnimation - partialTicks * 0.2f);
-            wasHovered = hovered;
-
-            GlStateManager.pushMatrix();
-            GuiRenderUtils.drawTabButton(x, y, width, height, hovered, id == ((DonateIntegrateGui) mc.currentScreen).currentTab, hoverAnimation);
-            drawCenteredString(mc.fontRenderer, displayString, x + width / 2, y +
-
-                    (height - 8) / 2, GuiRenderUtils.getTextColor());
-            GlStateManager.popMatrix();
-        }
-    }
-
-    /**
-     * Custom button with hover and animation effects.
-     */
-    private static class CustomButton extends GuiButton {
-        private float hoverAnimation = 0.0f;
-        private boolean wasHovered = false;
-
-        public CustomButton(int buttonId, int x, int y, int width, int height, String buttonText) {
-            super(buttonId, x, y, width, height, buttonText);
-        }
-
-        @Override
-        public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
-            if (!visible) return;
-
-            boolean hovered = mouseX >= x && mouseY >= y && mouseX < x + width && mouseY < y + height;
-            if (hovered && !wasHovered) hoverAnimation = 0.0f;
-            if (!hovered && wasHovered) hoverAnimation = 1.0f;
-            hoverAnimation = hovered ? Math.min(1.0f, hoverAnimation + partialTicks * 0.2f) :
-                    Math.max(0.0f, hoverAnimation - partialTicks * 0.2f);
-            wasHovered = hovered;
-
-            GlStateManager.pushMatrix();
-            GuiRenderUtils.drawButton(x, y, width, height, hovered, enabled, hoverAnimation);
-            drawCenteredString(mc.fontRenderer, displayString, x + width / 2, y + (height - 8) / 2, GuiRenderUtils.getTextColor());
-            GlStateManager.popMatrix();
-        }
-    }
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
         super.mouseClicked(mouseX, mouseY, mouseButton);
         tokenField.mouseClicked(mouseX, mouseY, mouseButton);
         userIdField.mouseClicked(mouseX, mouseY, mouseButton);
 
-        // Handle clicks on the actions list in the Actions tab
-        if (currentTab == 1 && mouseButton == 0) { // Left click only
-            int listTop = contentTop + 60;
-            int listLeft = contentLeft + 20;
-            int listWidth = CONTENT_WIDTH - 40;
-            int listHeight = ACTION_LIST_HEIGHT;
-
-            // Check if click is within the actions list bounds
+        if (currentTab == 1 && mouseButton == 0) {
+            int listTop = windowTop + CONTENT_MARGIN;
+            int listLeft = windowLeft + CONTENT_MARGIN;
+            int listWidth = windowWidth - 2 * CONTENT_MARGIN;
+            int listHeight = windowHeight - 60;
             if (mouseX >= listLeft && mouseX <= listLeft + listWidth &&
                     mouseY >= listTop && mouseY <= listTop + listHeight) {
                 List<Action> actions = ConfigHandler.getConfig().getActions();
-                // Calculate which action was clicked based on mouseY and scrollOffset
                 int relativeY = mouseY - listTop + (int) scrollOffset;
-                int actionIndex = relativeY / ACTION_ITEM_HEIGHT;
-                if (actionIndex >= 0 && actionIndex < actions.size()) {
-                    selectedActionIndex = actionIndex;
-                    editActionButton.enabled = true;
-                    deleteActionButton.enabled = true;
-                } else {
-                    selectedActionIndex = -1;
-                    editActionButton.enabled = false;
-                    deleteActionButton.enabled = false;
+                int currentY = 0;
+                selectedActionIndex = -1;
+                editActionButton.enabled = false;
+                deleteActionButton.enabled = false;
+
+                for (int i = 0; i < actions.size(); i++) {
+                    int actionHeight = 28 + actions.get(i).getCommands().size() * 22;
+                    if (relativeY >= currentY && relativeY < currentY + actionHeight) {
+                        selectedActionIndex = i;
+                        editActionButton.enabled = true;
+                        deleteActionButton.enabled = true;
+                        break;
+                    }
+                    currentY += actionHeight;
                 }
             } else {
-                // Click outside the list deselects the current action
                 selectedActionIndex = -1;
                 editActionButton.enabled = false;
                 deleteActionButton.enabled = false;
@@ -414,44 +357,31 @@ public class DonateIntegrateGui extends GuiScreen {
     }
 
     @Override
-    public void updateScreen() {
-        super.updateScreen();
-        tokenField.updateCursorCounter();
-        userIdField.updateCursorCounter();
-        if (fadeAnimation < 1.0f) {
-            fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
-        }
-    }
-    @Override
     public void handleMouseInput() throws IOException {
         super.handleMouseInput();
         int mouseX = Mouse.getEventX() * width / mc.displayWidth;
         int mouseY = height - Mouse.getEventY() * height / mc.displayHeight - 1;
 
-        // Only handle scrolling for the Actions tab (currentTab == 1)
-        if (currentTab == 1 && ConfigHandler.getConfig().getActions().size() > ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT) {
-            int listTop = contentTop + 120;
-            int listLeft = contentLeft + 20;
-            int listWidth = CONTENT_WIDTH - 40;
-            int listHeight = ACTION_LIST_HEIGHT;
-            int maxItems = ACTION_LIST_HEIGHT / ACTION_ITEM_HEIGHT;
+        if (currentTab == 1 && ConfigHandler.getConfig().getActions().size() > (windowHeight - 60) / ACTION_ITEM_HEIGHT) {
+            int listTop = windowTop + CONTENT_MARGIN;
+            int listLeft = windowLeft + CONTENT_MARGIN;
+            int listWidth = windowWidth - 2 * CONTENT_MARGIN;
+            int listHeight = windowHeight - 60;
+            int maxItems = listHeight / ACTION_ITEM_HEIGHT;
 
             int wheel = Mouse.getEventDWheel();
-            if (wheel != 0) {
-                // Check if mouse is over the actions list area
-                if (mouseX >= listLeft && mouseX <= listLeft + listWidth &&
-                        mouseY >= listTop && mouseY <= listTop + listHeight) {
-                    int maxScroll = (ConfigHandler.getConfig().getActions().size() - maxItems) * ACTION_ITEM_HEIGHT;
-                    scrollOffset -= wheel > 0 ? 20 : -20; // Scroll speed of 20 pixels
-                    scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
-                }
+            if (wheel != 0 && mouseX >= listLeft && mouseX <= listLeft + listWidth &&
+                    mouseY >= listTop && mouseY <= listTop + listHeight) {
+                int maxScroll = (ConfigHandler.getConfig().getActions().size() - maxItems) * ACTION_ITEM_HEIGHT;
+                scrollOffset -= wheel > 0 ? 20 : -20;
+                scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
             }
 
-            // Optional: Handle scrollbar dragging
             if (Mouse.isButtonDown(0)) {
-                int scrollbarLeft = contentLeft + CONTENT_WIDTH - 30;
+                int scrollbarLeft = windowLeft + windowWidth - CONTENT_MARGIN - 10;
+                int scrollbarTop = listTop + (int) ((listHeight - Math.max(20, listHeight * maxItems / ConfigHandler.getConfig().getActions().size())) * (scrollOffset / ((ConfigHandler.getConfig().getActions().size() - maxItems) * ACTION_ITEM_HEIGHT)));
                 if (!isDraggingScrollbar && mouseX >= scrollbarLeft && mouseX <= scrollbarLeft + 10 &&
-                        mouseY >= scrollbarTop && mouseY <= scrollbarTop + scrollbarHeight) {
+                        mouseY >= scrollbarTop && mouseY <= scrollbarTop + Math.max(20, listHeight * maxItems / ConfigHandler.getConfig().getActions().size())) {
                     isDraggingScrollbar = true;
                 }
             } else {
@@ -460,10 +390,69 @@ public class DonateIntegrateGui extends GuiScreen {
 
             if (isDraggingScrollbar) {
                 int maxScroll = (ConfigHandler.getConfig().getActions().size() - maxItems) * ACTION_ITEM_HEIGHT;
-                float scrollRatio = (mouseY - listTop - scrollbarHeight / 2.0f) / (listHeight - scrollbarHeight);
+                float scrollRatio = (mouseY - listTop - Math.max(20, listHeight * maxItems / ConfigHandler.getConfig().getActions().size()) / 2.0f) / (listHeight - Math.max(20, listHeight * maxItems / ConfigHandler.getConfig().getActions().size()));
                 scrollOffset = scrollRatio * maxScroll;
                 scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
             }
+        }
+    }
+
+    @Override
+    public void updateScreen() {
+        super.updateScreen();
+        tokenField.updateCursorCounter();
+        userIdField.updateCursorCounter();
+        if (fadeAnimation < 1.0f) {
+            fadeAnimation = Math.min(1.0f, fadeAnimation + 0.05f);
+        }
+    }
+
+    @Override
+    public void onGuiClosed() {
+        Keyboard.enableRepeatEvents(false);
+    }
+
+    private static class TabButton extends GuiButton {
+        private float hoverAnimation = 0.0f;
+        private boolean wasHovered = false;
+
+        public TabButton(int buttonId, int x, int y, int width, int height, String buttonText) {
+            super(buttonId, x, y, width, height, buttonText);
+        }
+
+        @Override
+        public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
+            if (!visible) return;
+
+            boolean hovered = mouseX >= x && mouseY >= y && mouseX < x + width && mouseY < y + height;
+            hoverAnimation = hovered ? Math.min(1.0f, hoverAnimation + partialTicks * 0.2f) :
+                    Math.max(0.0f, hoverAnimation - partialTicks * 0.2f);
+            wasHovered = hovered;
+
+            GuiRenderUtils.drawTabButton(x, y, width, height, hovered, id == ((DonateIntegrateGui) mc.currentScreen).currentTab, hoverAnimation);
+            drawCenteredString(mc.fontRenderer, displayString, x + width / 2, y + (height - 8) / 2, GuiRenderUtils.getTextColor());
+        }
+    }
+
+    private static class CustomButton extends GuiButton {
+        private float hoverAnimation = 0.0f;
+        private boolean wasHovered = false;
+
+        public CustomButton(int buttonId, int x, int y, int width, int height, String buttonText) {
+            super(buttonId, x, y, width, height, buttonText);
+        }
+
+        @Override
+        public void drawButton(Minecraft mc, int mouseX, int mouseY, float partialTicks) {
+            if (!visible) return;
+
+            boolean hovered = mouseX >= x && mouseY >= y && mouseX < x + width && mouseY < y + height;
+            hoverAnimation = hovered ? Math.min(1.0f, hoverAnimation + partialTicks * 0.2f) :
+                    Math.max(0.0f, hoverAnimation - partialTicks * 0.2f);
+            wasHovered = hovered;
+
+            GuiRenderUtils.drawButton(x, y, width, height, hovered, enabled, hoverAnimation);
+            drawCenteredString(mc.fontRenderer, displayString, x + width / 2, y + (height - 8) / 2, GuiRenderUtils.getTextColor());
         }
     }
 }
