@@ -62,7 +62,7 @@ public class DonatePayProvider implements DonationProvider {
 
             URI serverUri = new URI(ConfigHandler.getConfig().getDonpayWebSocketUrl());
             Map<String, String> headers = new HashMap<>();
-            headers.put("User-Agent", "Minecraft-DonateIntegrate/2.0.5");
+            headers.put("User-Agent", "Minecraft-DonateIntegrate/2.0.6");
 
             socket = new DonatePayWebSocket(serverUri, token, connectionToken, headers);
             socket.setConnectionLostTimeout(30);
@@ -126,7 +126,7 @@ public class DonatePayProvider implements DonationProvider {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.5");
+            conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.6");
             conn.setDoOutput(true);
 
             JsonObject payload = new JsonObject();
@@ -329,7 +329,7 @@ public class DonatePayProvider implements DonationProvider {
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Accept", "application/json");
-                conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.5");
+                conn.setRequestProperty("User-Agent", "Minecraft-DonateIntegrate/2.0.6");
                 conn.setDoOutput(true);
 
                 try (java.io.OutputStream os = conn.getOutputStream()) {
