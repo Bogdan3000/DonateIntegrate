@@ -1,5 +1,6 @@
 package com.bogdan3000.dintegrate.config;
 
+import net.minecraft.client.Minecraft;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,5 +67,37 @@ public class Action {
     @SuppressWarnings("unused")
     public void setExecutionMode(ExecutionMode executionMode) {
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.ALL;
+    }
+
+    // ✅ Добавлен метод выполнения команд с поддержкой /delay
+    public void execute() {
+        if (commands == null || commands.isEmpty()) return;
+
+        new Thread(() -> {
+            for (String command : commands) {
+                if (command == null || command.trim().isEmpty()) continue;
+
+                if (command.toLowerCase().startsWith("/delay")) {
+                    try {
+                        String[] parts = command.split(" ");
+                        if (parts.length > 1) {
+                            int seconds = Integer.parseInt(parts[1]);
+                            System.out.println("[DonateIntegrate] Delay " + seconds + " seconds...");
+                            Thread.sleep(seconds * 1000L);
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    continue;
+                }
+
+                Minecraft.getMinecraft().addScheduledTask(() -> {
+                    if (Minecraft.getMinecraft().player != null) {
+                        Minecraft.getMinecraft().player.sendChatMessage(command);
+                        System.out.println("[DonateIntegrate] Executed: " + command);
+                    }
+                });
+            }
+        }, "DonateIntegrate-ActionThread").start();
     }
 }

@@ -108,3 +108,14 @@ jar {
 tasks.extractAnnotationsJar.enabled = false
 
 build.dependsOn shadowJar
+
+// Полностью отключаем загрузку ассетов Minecraft
+// Полностью отключаем задачи, связанные с загрузкой ассетов
+gradle.taskGraph.whenReady { graph ->
+    graph.allTasks.each { task ->
+        if (task.name.toLowerCase().contains("getassets") || task.name.toLowerCase().contains("downloadassets")) {
+            task.enabled = false
+            println "⚠️  Задача ${task.name} отключена (скачивание ассетов пропущено)"
+        }
+    }
+}
