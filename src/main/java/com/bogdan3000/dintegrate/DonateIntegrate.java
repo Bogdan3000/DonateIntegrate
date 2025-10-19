@@ -25,7 +25,7 @@ import java.util.concurrent.*;
 /**
  * Полностью асинхронная версия DonateIntegrate с независимыми задержками.
  */
-@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "2.0.7", clientSideOnly = true)
+@Mod(modid = DonateIntegrate.MOD_ID, name = DonateIntegrate.NAME, version = "2.0.8", clientSideOnly = true)
 @SideOnly(Side.CLIENT)
 public class DonateIntegrate {
     public static final String MOD_ID = "dintegrate";
@@ -41,11 +41,15 @@ public class DonateIntegrate {
     // Очередь донатов
     private static final BlockingQueue<DonationProvider.DonationEvent> incomingDonations = new LinkedBlockingQueue<>();
 
-    // Планировщик, который управляет задержками между командами
+    // Планировщик для задержек между командами
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(8);
 
     // Активные потоки донатов
     private static final Map<Integer, Boolean> activeDonations = new ConcurrentHashMap<>();
+
+    // 💡 Новые поля для защиты от дублей
+    private static final Set<Integer> processedDonations = ConcurrentHashMap.newKeySet();
+    private static boolean providerStarted = false;
 
     public static class CommandToExecute {
         public final String command;
@@ -92,11 +96,11 @@ public class DonateIntegrate {
             incomingDonations.offer(event);
         });
 
-        // Запускаем обработчик очереди донатов
+        // Поток обработки очереди донатов
         new Thread(DonateIntegrate::processDonationsQueue, "DonationQueueProcessor").start();
     }
 
-    // ===== Обработка донатов =====
+    // ===== Основной цикл обработки донатов =====
     private static void processDonationsQueue() {
         while (true) {
             try {
@@ -113,6 +117,13 @@ public class DonateIntegrate {
 
     private static void processDonation(DonationProvider.DonationEvent event) {
         int id = event.id();
+
+        // 💥 Проверка на повтор
+        if (!processedDonations.add(id)) {
+            LOGGER.warn("Донат #{} уже был обработан — пропуск", id);
+            return;
+        }
+
         if (activeDonations.containsKey(id)) {
             LOGGER.warn("Донат #{} уже обрабатывается, пропуск", id);
             return;
@@ -167,9 +178,6 @@ public class DonateIntegrate {
                     try {
                         int seconds = Integer.parseInt(cmd.split(" ")[1]);
                         LOGGER.info("[Донат #{}] ⏱ Задержка {} сек", donationId, seconds);
-                        Minecraft.getMinecraft().addScheduledTask(() -> {
-                            if (Minecraft.getMinecraft().player != null);
-                        });
                         scheduler.schedule(this, seconds, TimeUnit.SECONDS);
                     } catch (Exception e) {
                         LOGGER.error("[Донат #{}] Ошибка в /delay: {}", donationId, e.getMessage());
@@ -194,17 +202,28 @@ public class DonateIntegrate {
     // ===== /dpi команда (эмулирует донат) =====
     public static void addCommand(CommandToExecute cmd) {
         DonationProvider.DonationEvent fake = new DonationProvider.DonationEvent(
-                "Tester", 0, cmd.command, new Random().nextInt(99999)
+                cmd.playerName, cmd.priority, cmd.command, (int) (System.currentTimeMillis() % Integer.MAX_VALUE)
         );
-        processDonation(fake);
+        incomingDonations.offer(fake);
+    }
+
+    public static void addCommand(String username, float amount, String message) {
+        int fakeId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
+        DonationProvider.DonationEvent fake = new DonationProvider.DonationEvent(username, amount, message, fakeId);
+        incomingDonations.offer(fake);
     }
 
     // ===== Управление провайдером =====
-    public static void startDonationProvider() {
+    public static synchronized void startDonationProvider() {
+        if (providerStarted) {
+            LOGGER.debug("⏩ Провайдер уже запущен, повторный старт пропущен");
+            return;
+        }
         try {
             if (ConfigHandler.getConfig().isEnabled()) {
                 stopDonationProvider();
                 donationProvider.connect();
+                providerStarted = true;
                 LOGGER.info("🔌 Donation provider запущен");
             }
         } catch (Exception e) {
@@ -217,22 +236,32 @@ public class DonateIntegrate {
             if (donationProvider != null) donationProvider.disconnect();
         } catch (Exception e) {
             LOGGER.error("Ошибка остановки провайдера: {}", e.getMessage());
+        } finally {
+            providerStarted = false;
         }
     }
 
-    // ===== Forge Client Events =====
     @SideOnly(Side.CLIENT)
     public static class ClientEventHandler {
         private int ticks = 0;
+        private boolean providerStartedOnce = false; // контроль первого старта
 
         @SubscribeEvent
         public void onClientTick(TickEvent.ClientTickEvent e) {
             if (e.phase != TickEvent.Phase.END || !isConnectedToServer) return;
             ticks++;
+
+            // Запуск проверки каждые 6000 тиков (~5 минут)
             if (ticks % 6000 == 0) {
                 try {
-                    if (!ConfigHandler.getConfig().isEnabled()) stopDonationProvider();
-                    else if (!donationProvider.isConnected()) startDonationProvider();
+                    if (!ConfigHandler.getConfig().isEnabled()) {
+                        stopDonationProvider();
+                        providerStartedOnce = false;
+                    } else if (!donationProvider.isConnected() && !providerStartedOnce) {
+                        startDonationProvider();
+                        providerStartedOnce = true;
+                        LOGGER.info("🔁 Провайдер перезапущен через тик-чек");
+                    }
                 } catch (Exception ex) {
                     LOGGER.error("Ошибка при проверке провайдера: {}", ex.getMessage());
                 }
@@ -241,8 +270,14 @@ public class DonateIntegrate {
 
         @SubscribeEvent
         public void onClientConnectedToServer(FMLNetworkEvent.ClientConnectedToServerEvent e) {
-            isConnectedToServer = true;
-            startDonationProvider();
+            if (!providerStartedOnce) { // 💡 защита от повторов Forge
+                isConnectedToServer = true;
+                startDonationProvider();
+                providerStartedOnce = true;
+                LOGGER.debug("Первое подключение клиента — провайдер запущен");
+            } else {
+                LOGGER.debug("Повторное событие подключения проигнорировано");
+            }
         }
 
         @SubscribeEvent
@@ -250,6 +285,9 @@ public class DonateIntegrate {
             isConnectedToServer = false;
             stopDonationProvider();
             activeDonations.clear();
+            processedDonations.clear();
+            providerStartedOnce = false; // сброс при выходе
+            LOGGER.debug("Клиент отключён — провайдер остановлен");
         }
     }
 }

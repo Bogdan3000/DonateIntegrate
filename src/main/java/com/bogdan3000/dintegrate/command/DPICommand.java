@@ -4,6 +4,7 @@ import com.bogdan3000.dintegrate.DonateIntegrate;
 import com.bogdan3000.dintegrate.NetworkHandler;
 import com.bogdan3000.dintegrate.config.ConfigHandler;
 import com.bogdan3000.dintegrate.config.ModConfig;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.command.CommandBase;
 import net.minecraft.command.CommandException;
@@ -35,6 +36,10 @@ public class DPICommand extends CommandBase {
 
     @Override
     public void execute(@Nonnull MinecraftServer server, @Nonnull ICommandSender sender, @Nonnull String[] args) throws CommandException {
+        // Исполняем только на клиенте, чтобы избежать двойного вызова
+        if (server != null && server.isDedicatedServer()) return;
+        if (Minecraft.getMinecraft().player == null) return;
+        if (!(Minecraft.getMinecraft().player.getName().equals(sender.getName()))) return;
         if (args.length == 0) {
             showHelp(sender);
             return;
@@ -196,7 +201,8 @@ public class DPICommand extends CommandBase {
                     String command = cmd.replace("{username}", username)
                             .replace("{message}", message)
                             .replace("{amount}", String.valueOf(amount));
-                    DonateIntegrate.addCommand(new DonateIntegrate.CommandToExecute(command, username, action.getPriority()));
+                    // Прямое выполнение через сумму для корректной симуляции доната
+                    DonateIntegrate.addCommand(username, amount, message);
                 }
 
                 sender.sendMessage(new TextComponentTranslation("dintegrate.command.test_success",
