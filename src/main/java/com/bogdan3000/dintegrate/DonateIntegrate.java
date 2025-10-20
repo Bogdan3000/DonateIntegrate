@@ -62,13 +62,18 @@ public class DonateIntegrate {
     }
 
     private void startConnection() {
-        donateProvider = new DonatePayProvider(config.getToken(), config.getUserId(), don -> {
-            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-            server.execute(() ->
-                    new ActionHandler(server, config)
-                            .execute(don.getAmount(), don.getUsername(), don.getMessage())
-            );
-        });
+        donateProvider = new DonatePayProvider(
+                config.getToken(),
+                config.getUserId(),
+                config.getTokenUrl(),
+                config.getSocketUrl(),
+                don -> {
+                    MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+                    server.execute(() ->
+                            new ActionHandler(server, config)
+                                    .execute(don.getAmount(), don.getUsername(), don.getMessage())
+                    );
+                });
 
         try {
             donateProvider.connect();
@@ -201,8 +206,6 @@ public class DonateIntegrate {
                 )
 
                 // /dpi test <name> <sum> <message>
-                // ... (всё остальное как раньше)
-
                 .then(Commands.literal("test")
                         .then(Commands.argument("name", StringArgumentType.string())
                                 .then(Commands.argument("sum", DoubleArgumentType.doubleArg(0.01))
@@ -215,14 +218,13 @@ public class DonateIntegrate {
                                                     MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
                                                     Map<Double, String> rules = config.getRules();
 
-                                                    // Теперь проверяем строгое равенство
-                                                    boolean hasExactRule = rules.keySet().stream()
-                                                            .anyMatch(amount -> Math.abs(amount - sum) < 0.0001);
+                                                    // Проверяем, есть ли подходящее правило
+                                                    boolean hasRule = rules.keySet().stream().anyMatch(amount -> sum >= amount);
 
-                                                    if (!hasExactRule) {
+                                                    if (!hasRule) {
                                                         ctx.getSource().sendSuccess(() ->
-                                                                Component.literal("§c[DIntegrate] No donation rule found for this exact amount."), false);
-                                                        LOGGER.warn("[DIntegrate] No exact donation rule for test amount {}", sum);
+                                                                Component.literal("§c[DIntegrate] No donation rule found for this amount."), false);
+                                                        LOGGER.warn("[DIntegrate] No donation rule found for test amount {}", sum);
                                                         return 0;
                                                     }
 
@@ -235,7 +237,7 @@ public class DonateIntegrate {
                                                                     .execute(sum, name, message)
                                                     );
 
-                                                    LOGGER.info("[DIntegrate] Simulated donation executed (exact): {} sent {} ({})", name, sum, message);
+                                                    LOGGER.info("[DIntegrate] Simulated donation executed: {} sent {} ({})", name, sum, message);
                                                     return 1;
                                                 })
                                         )

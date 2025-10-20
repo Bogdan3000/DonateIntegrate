@@ -19,12 +19,13 @@ import java.util.function.Consumer;
 public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
 
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final String TOKEN_URL = "https://donatepay.ru/api/v2/socket/token";
-    private static final String WS_URL = "wss://centrifugo.donatepay.ru/connection/websocket?format=json";
 
     private final String accessToken;
     private final int userId;
+    private final String tokenUrl;
+    private final String socketUrl;
     private final Consumer<DonationEvent> donationHandler;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -44,11 +45,13 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
     private String connectToken;
     private String clientId;
     private String subscriptionToken;
-    private int msgCounter = 2; // handshake=1, subscribe=2, дальше идут пинги с 3
+    private int msgCounter = 2; // handshake=1, subscribe=2, дальше пинги
 
-    public DonatePayProvider(String accessToken, int userId, Consumer<DonationEvent> handler) {
+    public DonatePayProvider(String accessToken, int userId, String tokenUrl, String socketUrl, Consumer<DonationEvent> handler) {
         this.accessToken = accessToken;
         this.userId = userId;
+        this.tokenUrl = tokenUrl;
+        this.socketUrl = socketUrl;
         this.donationHandler = handler;
     }
 
@@ -59,22 +62,22 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
             return;
         }
 
-        LOGGER.info("[DIntegrate] Requesting connection token...");
+        LOGGER.info("[DIntegrate] Requesting connection token from {}", tokenUrl);
         getConnectionToken().thenAccept(token -> {
             if (token == null || token.isEmpty()) {
-                LOGGER.error("[DIntegrate] Failed to get token, retrying...");
+                LOGGER.error("[DIntegrate] Failed to get connection token, retrying...");
                 scheduleReconnect();
                 return;
             }
             this.connectToken = token;
-            LOGGER.info("[DIntegrate] Got connection token: {}", token);
+            LOGGER.info("[DIntegrate] Got connection token.");
 
             httpClient.newWebSocketBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
-                    .buildAsync(URI.create(WS_URL), this)
+                    .buildAsync(URI.create(socketUrl), this)
                     .thenAccept(ws -> {
                         this.socket = ws;
-                        LOGGER.info("[DIntegrate] WebSocket connected to DonatePay.");
+                        LOGGER.info("[DIntegrate] WebSocket connected to {}", socketUrl);
                         startPing(ws);
                         scheduler.schedule(() -> sendHandshake(ws), 500, TimeUnit.MILLISECONDS);
                     })
@@ -105,7 +108,7 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
         try {
             String channel = "$public:" + userId;
             JsonObject root = new JsonObject();
-            root.addProperty("method", 1); // сервер требует именно 1
+            root.addProperty("method", 1);
             root.addProperty("id", 2);
             JsonObject params = new JsonObject();
             params.addProperty("channel", channel);
@@ -122,7 +125,7 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
         try {
             String body = "{\"access_token\":\"" + accessToken + "\"}";
             HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(TOKEN_URL))
+                    .uri(URI.create(tokenUrl))
                     .timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
@@ -131,7 +134,7 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
             return httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString())
                     .thenApply(resp -> {
                         if (resp.statusCode() != 200) {
-                            LOGGER.error("[DIntegrate] HTTP error {}", resp.statusCode());
+                            LOGGER.error("[DIntegrate] HTTP error {} when requesting {}", resp.statusCode(), tokenUrl);
                             return null;
                         }
                         try {
@@ -156,7 +159,7 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
             body.addProperty("client", clientId);
             body.add("channels", JsonParser.parseString("[\"$public:" + userId + "\"]"));
 
-            String url = TOKEN_URL + "?access_token=" + accessToken;
+            String url = tokenUrl + "?access_token=" + accessToken;
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(10))
