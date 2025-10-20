@@ -7,31 +7,34 @@ import java.util.Map;
 
 public class ActionHandler {
     private final MinecraftServer server;
+    private final Config config;
 
-    public ActionHandler(MinecraftServer server) {
+    public ActionHandler(MinecraftServer server, Config config) {
         this.server = server;
+        this.config = config;
     }
 
     public void execute(double sum, String name, String message) {
-        Config config = new Config();
-        config.load();
         Map<Double, String> rules = config.getRules();
+        String safeName = name != null ? name : "Unknown";
+        String safeMsg = message != null ? message : "";
 
-        for (Map.Entry<Double, String> entry : rules.entrySet()) {
-            if (sum >= entry.getKey()) {
-                String cmd = entry.getValue()
-                        .replace("{name}", name)
-                        .replace("{sum}", String.valueOf(sum))
-                        .replace("{msg}", message);
-                System.out.println("[DIntegrate] Executing command: " + cmd);
-                server.execute(() ->
-                        server.getCommands().performPrefixedCommand(
-                                server.createCommandSourceStack().withPermission(4),
-                                cmd
-                        )
-                );
-                break;
-            }
-        }
+        rules.entrySet().stream()
+                .sorted(Map.Entry.<Double, String>comparingByKey().reversed())
+                .filter(e -> sum >= e.getKey())
+                .findFirst()
+                .ifPresent(entry -> {
+                    String cmd = entry.getValue()
+                            .replace("{name}", safeName)
+                            .replace("{sum}", String.valueOf(sum))
+                            .replace("{msg}", safeMsg);
+                    System.out.println("[DIntegrate] Executing command: " + cmd);
+                    server.execute(() ->
+                            server.getCommands().performPrefixedCommand(
+                                    server.createCommandSourceStack().withPermission(4),
+                                    cmd
+                            )
+                    );
+                });
     }
 }

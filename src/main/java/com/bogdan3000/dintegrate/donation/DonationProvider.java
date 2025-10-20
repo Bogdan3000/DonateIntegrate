@@ -10,11 +10,11 @@ public interface DonationProvider {
 
     class DonationEvent {
         private final String username;
-        private final float amount;
+        private final double amount;
         private final String message;
         private final int id;
 
-        public DonationEvent(String username, float amount, String message, int id) {
+        public DonationEvent(String username, double amount, String message, int id) {
             this.username = username;
             this.amount = amount;
             this.message = message;
@@ -22,8 +22,18 @@ public interface DonationProvider {
         }
 
         public String getUsername() { return username; }
-        public float getAmount() { return amount; }
+        public double getAmount() { return amount; }
         public String getMessage() { return message; }
         public int getId() { return id; }
+
+        @Override
+        public String toString() {
+            return "DonationEvent{" +
+                    "username='" + username + '\'' +
+                    ", amount=" + amount +
+                    ", message='" + message + '\'' +
+                    ", id=" + id +
+                    '}';
+        }
     }
 }
