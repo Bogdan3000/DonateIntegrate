@@ -1,6 +1,6 @@
 {
   "pack": {
-    "description": "dintegrate resources",
+    "description": "DonateIntegrate — интеграция DonatePay с Minecraft",
     "pack_format": 15
   }
 }
