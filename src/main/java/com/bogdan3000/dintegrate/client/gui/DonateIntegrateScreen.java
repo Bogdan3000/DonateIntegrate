@@ -2,27 +2,26 @@ package com.bogdan3000.dintegrate.client.gui;
 
 import com.bogdan3000.dintegrate.Config;
 import com.bogdan3000.dintegrate.donation.DonatePayProvider;
-import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 public class DonateIntegrateScreen extends Screen {
-    private final Config config;
-    private EditBox tokenBox;
-    private EditBox userIdBox;
-    private Button saveButton;
-    private Button reconnectButton;
-    private Button testButton;
 
-    private boolean connected = false;
+    private final Config config;
     private final DonatePayProvider provider;
+    private final boolean connected;
+
+    private TabBase activeTab;
+    private TabConfig tabConfig;
+    private TabCommands tabCommands;
+    private TabMisc tabMisc;
+    private TabInfo tabInfo;
 
     public DonateIntegrateScreen(Config config, DonatePayProvider provider, boolean connected) {
-        super(Component.literal("DonateIntegrate Control Panel"));
+        super(Component.literal("DonateIntegrate Manager"));
         this.config = config;
         this.provider = provider;
         this.connected = connected;
@@ -31,79 +30,67 @@ public class DonateIntegrateScreen extends Screen {
     @Override
     protected void init() {
         int centerX = this.width / 2;
-        int y = this.height / 4 + 40;
+        int topY = 20;
 
-        tokenBox = new EditBox(this.font, centerX - 100, y, 200, 20, Component.literal("Token"));
-        tokenBox.setValue(config.getToken());
-        this.addRenderableWidget(tokenBox);
+        int buttonWidth = 100;
+        int spacing = 5;
+        int startX = centerX - (buttonWidth * 2 + spacing * 3) / 2;
 
-        y += 25;
-        userIdBox = new EditBox(this.font, centerX - 100, y, 200, 20, Component.literal("User ID"));
-        userIdBox.setValue(String.valueOf(config.getUserId()));
-        this.addRenderableWidget(userIdBox);
+        // Главное меню
+        addRenderableWidget(Button.builder(Component.literal("Config"), b -> switchTab(tabConfig))
+                .bounds(startX, topY, buttonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Commands"), b -> switchTab(tabCommands))
+                .bounds(startX + buttonWidth + spacing, topY, buttonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Misc"), b -> switchTab(tabMisc))
+                .bounds(startX + (buttonWidth + spacing) * 2, topY, buttonWidth, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Info"), b -> switchTab(tabInfo))
+                .bounds(startX + (buttonWidth + spacing) * 3, topY, buttonWidth, 20).build());
 
-        y += 30;
-        saveButton = Button.builder(Component.literal("Сохранить"), btn -> {
-            configSave();
-        }).bounds(centerX - 100, y, 95, 20).build();
-        this.addRenderableWidget(saveButton);
+        // Инициализация вкладок (один раз)
+        tabConfig = new TabConfig(this, config, provider);
+        tabCommands = new TabCommands(this, config);
+        tabMisc = new TabMisc(this);
+        tabInfo = new TabInfo(this);
 
-        reconnectButton = Button.builder(Component.literal("Переподключить"), btn -> {
-            reconnect();
-        }).bounds(centerX + 5, y, 95, 20).build();
-        this.addRenderableWidget(reconnectButton);
-
-        y += 30;
-        testButton = Button.builder(Component.literal("Тест доната"), btn -> {
-            simulateDonation();
-        }).bounds(centerX - 50, y, 100, 20).build();
-        this.addRenderableWidget(testButton);
-    }
-
-    private void configSave() {
-        try {
-            var fieldToken = config.getClass().getDeclaredField("token");
-            var fieldUser = config.getClass().getDeclaredField("userId");
-            fieldToken.setAccessible(true);
-            fieldUser.setAccessible(true);
-            fieldToken.set(config, tokenBox.getValue());
-            fieldUser.set(config, Integer.parseInt(userIdBox.getValue()));
-            Minecraft.getInstance().player.sendSystemMessage(Component.literal("§a[DIntegrate] Конфиг обновлён!"));
-        } catch (Exception e) {
-            Minecraft.getInstance().player.sendSystemMessage(Component.literal("§cОшибка сохранения конфига!"));
-            e.printStackTrace();
+        // Первая вкладка по умолчанию
+        if (activeTab == null) {
+            activeTab = tabConfig;
+            activeTab.init(minecraft, this.width, this.height);
+            activeTab.addWidgets();
         }
     }
 
-    private void reconnect() {
-        if (provider != null) {
-            provider.disconnect();
-            provider.connect();
-            Minecraft.getInstance().player.sendSystemMessage(Component.literal("§e[DIntegrate] Переподключение к DonatePay..."));
-        }
-    }
+    private void switchTab(TabBase tab) {
+        if (tab == null || tab == activeTab) return;
 
-    private void simulateDonation() {
-        Minecraft mc = Minecraft.getInstance();
-        mc.player.sendSystemMessage(Component.literal("§d[DIntegrate] Симуляция доната (50 RUB, тест)"));
-        if (mc.player.connection != null) {
-            mc.player.connection.sendChat("/dpi test Tester 50 Test donation");
-        }
+        clearWidgets();
+        init(); // пересоздаёт верхнее меню
+        activeTab = tab;
+        activeTab.init(minecraft, this.width, this.height);
+        activeTab.addWidgets();
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
         this.renderBackground(graphics);
-        graphics.drawCenteredString(this.font, "DonateIntegrate Control Panel", this.width / 2, 20, 0xFFFFFF);
-
-        String status = connected ? "§aПодключено" : "§cОтключено";
-        graphics.drawCenteredString(this.font, "Статус: " + status, this.width / 2, 40, 0xFFFFFF);
-
         super.render(graphics, mouseX, mouseY, partialTicks);
+
+        graphics.drawCenteredString(this.font, "DonateIntegrate Manager", this.width / 2, 5, 0xFFFFFF);
+
+        if (activeTab != null)
+            activeTab.render(graphics, mouseX, mouseY, partialTicks);
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    public Minecraft getMinecraft() {
+        return this.minecraft;
+    }
+
+    public void addChildWidget(Button button) {
+        addRenderableWidget(button);
     }
 }
