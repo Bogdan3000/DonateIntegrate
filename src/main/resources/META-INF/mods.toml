@@ -1,10 +1,27 @@
 modLoader="javafml"
-loaderVersion="${loader_version_range}"
-license="${mod_license}"
+loaderVersion="[47,)"  # для Forge 1.20.1
+license="MIT"
 
 [[mods]]
-modId="${mod_id}"
-version="${mod_version}"
-displayName="${mod_name}"
-authors="${mod_authors}"
-description='''${mod_description}'''
+modId="dintegrate"
+version="1.0.0"
+displayName="Donate Integrate"
+authors="Bohdan Ihnatenko"
+description='''
+Интеграция DonatePay с Minecraft-сервером.
+Позволяет выполнять команды при получении донатов.
+'''
+
+[[dependencies.dintegrate]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="SERVER"
+
+[[dependencies.dintegrate]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20,1.21)"
+ordering="NONE"
+side="SERVER"
