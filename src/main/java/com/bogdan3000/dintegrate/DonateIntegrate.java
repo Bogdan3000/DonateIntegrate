@@ -6,25 +6,23 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.logging.LogUtils;
+import net.minecraft.client.Minecraft;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.server.ServerStartingEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.server.ServerLifecycleHooks;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import org.slf4j.Logger;
 
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.Map;
 
 @Mod("dintegrate")
+@Mod.EventBusSubscriber(modid = "dintegrate", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class DonateIntegrate {
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -36,109 +34,29 @@ public class DonateIntegrate {
     }
 
     @SubscribeEvent
-    public void setup(FMLCommonSetupEvent event) {
-        LOGGER.info("DIntegrate initialized");
-    }
-
-    @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
-        LOGGER.info("Server starting, loading config...");
-
+    public static void onClientSetup(FMLClientSetupEvent event) {
+        LOGGER.info("[DIntegrate] Client mod initialized");
         try {
             config = new Config();
             config.load();
-        } catch (Exception e) {
-            LOGGER.error("Failed to load config", e);
-            return;
-        }
-
-        if (config.getUserId() <= 0) {
-            LOGGER.error("Invalid or missing user_id in config!");
-            return;
-        }
-
-        LOGGER.info("Connecting to DonatePay WebSocket...");
-        startConnection();
-    }
-
-    private void startConnection() {
-        donateProvider = new DonatePayProvider(
-                config.getToken(),
-                config.getUserId(),
-                config.getTokenUrl(),
-                config.getSocketUrl(),
-                don -> {
-                    MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-                    server.execute(() ->
-                            new ActionHandler(server, config)
-                                    .execute(don.getAmount(), don.getUsername(), don.getMessage())
-                    );
-                });
-
-        try {
-            donateProvider.connect();
-        } catch (Exception e) {
-            LOGGER.error("Failed to connect to DonatePay WebSocket", e);
-        }
-    }
-
-    private void restartConnection() {
-        try {
-            if (donateProvider != null) {
-                donateProvider.disconnect();
-                LOGGER.info("[DIntegrate] Old DonatePay connection closed.");
-            }
-            startConnection();
-            LOGGER.info("[DIntegrate] DonatePay connection restarted.");
-        } catch (Exception e) {
-            LOGGER.error("[DIntegrate] Failed to restart connection", e);
-        }
-    }
-
-    private void stopConnection() {
-        if (donateProvider != null) {
-            try {
-                donateProvider.disconnect();
-                LOGGER.info("[DIntegrate] DonatePay connection stopped manually.");
-            } catch (Exception e) {
-                LOGGER.error("[DIntegrate] Failed to stop connection", e);
-            }
-        } else {
-            LOGGER.warn("[DIntegrate] No active DonatePay connection to stop.");
+        } catch (IOException e) {
+            LOGGER.error("[DIntegrate] Failed to load config", e);
         }
     }
 
     @SubscribeEvent
-    public void onServerStopping(ServerStoppingEvent event) {
-        if (donateProvider != null) {
-            donateProvider.disconnect();
-            LOGGER.info("DonatePay connection closed.");
-        }
-    }
-
-    @SubscribeEvent
-    public void onRegisterCommands(RegisterCommandsEvent event) {
+    public void onRegisterCommands(RegisterClientCommandsEvent event) {
         var dispatcher = event.getDispatcher();
 
         dispatcher.register(Commands.literal("dpi")
-                .requires(cs -> cs.hasPermission(4))
-
                 // /dpi token <value>
                 .then(Commands.literal("token")
                         .then(Commands.argument("value", StringArgumentType.string())
                                 .executes(ctx -> {
                                     String value = StringArgumentType.getString(ctx, "value");
-                                    if (config != null) {
-                                        saveToConfig("token", value);
-                                        try {
-                                            config.load();
-                                        } catch (IOException e) {
-                                            LOGGER.error("[DIntegrate] Failed to reload config", e);
-                                        }
-                                        restartConnection();
-                                        ctx.getSource().sendSuccess(() ->
-                                                Component.literal("§aToken updated and connection restarted!"), true);
-                                    }
+                                    saveToConfig("token", value);
+                                    reloadAndRestart();
+                                    sendClientMessage("§aToken updated and connection restarted!");
                                     return 1;
                                 })
                         )
@@ -149,17 +67,9 @@ public class DonateIntegrate {
                         .then(Commands.argument("value", IntegerArgumentType.integer(1))
                                 .executes(ctx -> {
                                     int userId = IntegerArgumentType.getInteger(ctx, "value");
-                                    if (config != null) {
-                                        saveToConfig("user_id", String.valueOf(userId));
-                                        try {
-                                            config.load();
-                                        } catch (IOException e) {
-                                            LOGGER.error("[DIntegrate] Failed to reload config", e);
-                                        }
-                                        restartConnection();
-                                        ctx.getSource().sendSuccess(() ->
-                                                Component.literal("§aUser ID updated and connection restarted!"), true);
-                                    }
+                                    saveToConfig("user_id", String.valueOf(userId));
+                                    reloadAndRestart();
+                                    sendClientMessage("§aUser ID updated and connection restarted!");
                                     return 1;
                                 })
                         )
@@ -168,14 +78,8 @@ public class DonateIntegrate {
                 // /dpi start
                 .then(Commands.literal("start")
                         .executes(ctx -> {
-                            if (donateProvider == null || !donateProvider.isConnected()) {
-                                startConnection();
-                                ctx.getSource().sendSuccess(() ->
-                                        Component.literal("§aDonatePay connection started!"), true);
-                            } else {
-                                ctx.getSource().sendSuccess(() ->
-                                        Component.literal("§eDonatePay is already connected."), false);
-                            }
+                            startConnection();
+                            sendClientMessage("§aDonatePay connection started!");
                             return 1;
                         })
                 )
@@ -183,14 +87,8 @@ public class DonateIntegrate {
                 // /dpi stop
                 .then(Commands.literal("stop")
                         .executes(ctx -> {
-                            if (donateProvider != null) {
-                                stopConnection();
-                                ctx.getSource().sendSuccess(() ->
-                                        Component.literal("§cDonatePay connection stopped."), true);
-                            } else {
-                                ctx.getSource().sendSuccess(() ->
-                                        Component.literal("§eNo active connection to stop."), false);
-                            }
+                            stopConnection();
+                            sendClientMessage("§cDonatePay connection stopped.");
                             return 1;
                         })
                 )
@@ -199,8 +97,7 @@ public class DonateIntegrate {
                 .then(Commands.literal("restart")
                         .executes(ctx -> {
                             restartConnection();
-                            ctx.getSource().sendSuccess(() ->
-                                    Component.literal("§bDonatePay connection restarted!"), true);
+                            sendClientMessage("§bDonatePay connection restarted!");
                             return 1;
                         })
                 )
@@ -215,28 +112,15 @@ public class DonateIntegrate {
                                                     double sum = DoubleArgumentType.getDouble(ctx, "sum");
                                                     String message = StringArgumentType.getString(ctx, "message");
 
-                                                    MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-                                                    Map<Double, String> rules = config.getRules();
-
-                                                    // Проверяем, есть ли подходящее правило
-                                                    boolean hasRule = rules.keySet().stream().anyMatch(amount -> sum >= amount);
-
-                                                    if (!hasRule) {
-                                                        ctx.getSource().sendSuccess(() ->
-                                                                Component.literal("§c[DIntegrate] No donation rule found for this amount."), false);
-                                                        LOGGER.warn("[DIntegrate] No donation rule found for test amount {}", sum);
+                                                    var rules = config.getRules();
+                                                    if (!rules.containsKey(sum)) {
+                                                        sendClientMessage("§c[DIntegrate] No donation rule found for this exact amount.");
                                                         return 0;
                                                     }
 
-                                                    ctx.getSource().sendSuccess(() ->
-                                                            Component.literal("§d[DIntegrate] Simulating donation from §b"
-                                                                    + name + " §7(" + sum + "): §f" + message), true);
-
-                                                    server.execute(() ->
-                                                            new ActionHandler(server, config)
-                                                                    .execute(sum, name, message)
-                                                    );
-
+                                                    var rule = rules.get(sum);
+                                                    sendClientMessage("§d[DIntegrate] Simulating donation (" + sum + " RUB, mode: " + rule.mode + ")");
+                                                    new ActionHandler(config).execute(sum, name, message);
                                                     LOGGER.info("[DIntegrate] Simulated donation executed: {} sent {} ({})", name, sum, message);
                                                     return 1;
                                                 })
@@ -247,7 +131,7 @@ public class DonateIntegrate {
         );
     }
 
-    private void saveToConfig(String key, String value) {
+    private static void saveToConfig(String key, String value) {
         try {
             java.io.File file = new java.io.File("config/dintegrate.cfg");
             java.util.List<String> lines = java.nio.file.Files.readAllLines(file.toPath());
@@ -267,5 +151,45 @@ public class DonateIntegrate {
         } catch (Exception e) {
             LOGGER.error("[DIntegrate] Failed to update config", e);
         }
+    }
+
+    private static void reloadAndRestart() {
+        try {
+            config.load();
+            restartConnection();
+        } catch (IOException e) {
+            LOGGER.error("[DIntegrate] Failed to reload config", e);
+        }
+    }
+
+    private static void startConnection() {
+        if (donateProvider != null && donateProvider.isConnected()) return;
+        donateProvider = new DonatePayProvider(
+                config.getToken(),
+                config.getUserId(),
+                config.getTokenUrl(),
+                config.getSocketUrl(),
+                don -> new ActionHandler(config)
+                        .execute(don.getAmount(), don.getUsername(), don.getMessage())
+        );
+        donateProvider.connect();
+    }
+
+    private static void stopConnection() {
+        if (donateProvider != null) {
+            donateProvider.disconnect();
+            donateProvider = null;
+        }
+    }
+
+    private static void restartConnection() {
+        stopConnection();
+        startConnection();
+    }
+
+    private static void sendClientMessage(String text) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null)
+            mc.player.sendSystemMessage(Component.literal(text));
     }
 }
