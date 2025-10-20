@@ -42,6 +42,14 @@ public class DonateIntegrate {
         } catch (IOException e) {
             LOGGER.error("[DIntegrate] Failed to load config", e);
         }
+
+        event.enqueueWork(() -> {
+            // ✅ Регистрируем бинды и подписываем KeybindHandler на ивенты
+            com.bogdan3000.dintegrate.client.KeybindHandler.init(config, donateProvider);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                    com.bogdan3000.dintegrate.client.KeybindHandler.class
+            );
+        });
     }
 
     @SubscribeEvent
