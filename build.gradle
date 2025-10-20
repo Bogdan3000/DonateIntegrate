@@ -21,8 +21,21 @@ minecraft {
     copyIdeResources = true
 
     runs {
-        configureEach {
+        client {
             workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.logging.markers', 'REGISTRIES'
+            args '--username', 'Player'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        server {
+            workingDirectory project.file('run')
+            args '--nogui'
             property 'forge.logging.console.level', 'debug'
             property 'forge.logging.markers', 'REGISTRIES'
             mods {
@@ -31,7 +44,17 @@ minecraft {
                 }
             }
         }
-        server { args '--nogui' }
+
+        data {
+            workingDirectory project.file('run')
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/')
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
     }
 }
 

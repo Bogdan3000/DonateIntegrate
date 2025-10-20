@@ -11,9 +11,9 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.server.ServerLifecycleHooks;
+import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.util.logging.Logger;
 
 @Mod("dintegrate")
 public class DonateIntegrate {
@@ -51,11 +51,17 @@ public class DonateIntegrate {
         LOGGER.info("Connecting to DonatePay WebSocket...");
         donateProvider = new DonatePayProvider(config.getToken(), config.getUserId(), don -> {
             MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-            server.execute(() -> new ActionHandler(server)
-                    .execute(don.getAmount(), don.getUsername(), don.getMessage()));
+            server.execute(() ->
+                    new ActionHandler(server, config)
+                            .execute(don.getAmount(), don.getUsername(), don.getMessage())
+            );
         });
 
-        donateProvider.connect();
+        try {
+            donateProvider.connect();
+        } catch (Exception e) {
+            LOGGER.error("Failed to connect to DonatePay WebSocket", e);
+        }
     }
 
     @SubscribeEvent

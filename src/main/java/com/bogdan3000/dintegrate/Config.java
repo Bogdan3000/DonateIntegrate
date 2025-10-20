@@ -1,9 +1,14 @@
 package com.bogdan3000.dintegrate;
 
+import com.mojang.logging.LogUtils;
+import org.slf4j.Logger;
+
 import java.io.*;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Config {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private final File file = new File("config/dintegrate.cfg");
     private final Map<Double, String> rules = new HashMap<>();
     private String token = "";
@@ -11,14 +16,16 @@ public class Config {
 
     public void load() throws IOException {
         if (!file.exists()) {
-            file.getParentFile().mkdirs();
+            File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+
             try (PrintWriter writer = new PrintWriter(file)) {
                 writer.println("token=YOUR_DONATEPAY_TOKEN");
                 writer.println("user_id=0");
                 writer.println("rule_1=50:say Спасибо за донат!");
                 writer.println("rule_2=100:give @a minecraft:diamond 1");
             }
-            System.out.println("[DIntegrate] Default config created.");
+            LOGGER.info("[DIntegrate] Default config created.");
         }
 
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
@@ -40,7 +47,7 @@ public class Config {
                         }
                     }
                 } catch (Exception e) {
-                    System.err.println("[DIntegrate] Error parsing config line: " + line);
+                    LOGGER.error("[DIntegrate] Error parsing config line: {}", line);
                 }
             });
         }
@@ -48,5 +55,5 @@ public class Config {
 
     public String getToken() { return token; }
     public int getUserId() { return userId; }
-    public Map<Double, String> getRules() { return Collections.unmodifiableMap(rules); }
+    public Map<Double, String> getRules() { return rules; }
 }
