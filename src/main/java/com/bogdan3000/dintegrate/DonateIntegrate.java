@@ -2,6 +2,7 @@ package com.bogdan3000.dintegrate;
 
 import com.bogdan3000.dintegrate.donation.DonatePayProvider;
 import com.bogdan3000.dintegrate.logic.ActionHandler;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.logging.LogUtils;
@@ -21,6 +22,7 @@ import org.slf4j.Logger;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.Map;
 
 @Mod("dintegrate")
 public class DonateIntegrate {
@@ -56,6 +58,10 @@ public class DonateIntegrate {
         }
 
         LOGGER.info("Connecting to DonatePay WebSocket...");
+        startConnection();
+    }
+
+    private void startConnection() {
         donateProvider = new DonatePayProvider(config.getToken(), config.getUserId(), don -> {
             MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
             server.execute(() ->
@@ -68,6 +74,32 @@ public class DonateIntegrate {
             donateProvider.connect();
         } catch (Exception e) {
             LOGGER.error("Failed to connect to DonatePay WebSocket", e);
+        }
+    }
+
+    private void restartConnection() {
+        try {
+            if (donateProvider != null) {
+                donateProvider.disconnect();
+                LOGGER.info("[DIntegrate] Old DonatePay connection closed.");
+            }
+            startConnection();
+            LOGGER.info("[DIntegrate] DonatePay connection restarted.");
+        } catch (Exception e) {
+            LOGGER.error("[DIntegrate] Failed to restart connection", e);
+        }
+    }
+
+    private void stopConnection() {
+        if (donateProvider != null) {
+            try {
+                donateProvider.disconnect();
+                LOGGER.info("[DIntegrate] DonatePay connection stopped manually.");
+            } catch (Exception e) {
+                LOGGER.error("[DIntegrate] Failed to stop connection", e);
+            }
+        } else {
+            LOGGER.warn("[DIntegrate] No active DonatePay connection to stop.");
         }
     }
 
@@ -85,6 +117,8 @@ public class DonateIntegrate {
 
         dispatcher.register(Commands.literal("dpi")
                 .requires(cs -> cs.hasPermission(4))
+
+                // /dpi token <value>
                 .then(Commands.literal("token")
                         .then(Commands.argument("value", StringArgumentType.string())
                                 .executes(ctx -> {
@@ -96,13 +130,16 @@ public class DonateIntegrate {
                                         } catch (IOException e) {
                                             LOGGER.error("[DIntegrate] Failed to reload config", e);
                                         }
+                                        restartConnection();
                                         ctx.getSource().sendSuccess(() ->
-                                                Component.literal("§aToken updated successfully!"), true);
+                                                Component.literal("§aToken updated and connection restarted!"), true);
                                     }
                                     return 1;
                                 })
                         )
                 )
+
+                // /dpi user <value>
                 .then(Commands.literal("user")
                         .then(Commands.argument("value", IntegerArgumentType.integer(1))
                                 .executes(ctx -> {
@@ -114,11 +151,95 @@ public class DonateIntegrate {
                                         } catch (IOException e) {
                                             LOGGER.error("[DIntegrate] Failed to reload config", e);
                                         }
+                                        restartConnection();
                                         ctx.getSource().sendSuccess(() ->
-                                                Component.literal("§aUser ID updated successfully!"), true);
+                                                Component.literal("§aUser ID updated and connection restarted!"), true);
                                     }
                                     return 1;
                                 })
+                        )
+                )
+
+                // /dpi start
+                .then(Commands.literal("start")
+                        .executes(ctx -> {
+                            if (donateProvider == null || !donateProvider.isConnected()) {
+                                startConnection();
+                                ctx.getSource().sendSuccess(() ->
+                                        Component.literal("§aDonatePay connection started!"), true);
+                            } else {
+                                ctx.getSource().sendSuccess(() ->
+                                        Component.literal("§eDonatePay is already connected."), false);
+                            }
+                            return 1;
+                        })
+                )
+
+                // /dpi stop
+                .then(Commands.literal("stop")
+                        .executes(ctx -> {
+                            if (donateProvider != null) {
+                                stopConnection();
+                                ctx.getSource().sendSuccess(() ->
+                                        Component.literal("§cDonatePay connection stopped."), true);
+                            } else {
+                                ctx.getSource().sendSuccess(() ->
+                                        Component.literal("§eNo active connection to stop."), false);
+                            }
+                            return 1;
+                        })
+                )
+
+                // /dpi restart
+                .then(Commands.literal("restart")
+                        .executes(ctx -> {
+                            restartConnection();
+                            ctx.getSource().sendSuccess(() ->
+                                    Component.literal("§bDonatePay connection restarted!"), true);
+                            return 1;
+                        })
+                )
+
+                // /dpi test <name> <sum> <message>
+                // ... (всё остальное как раньше)
+
+                .then(Commands.literal("test")
+                        .then(Commands.argument("name", StringArgumentType.string())
+                                .then(Commands.argument("sum", DoubleArgumentType.doubleArg(0.01))
+                                        .then(Commands.argument("message", StringArgumentType.greedyString())
+                                                .executes(ctx -> {
+                                                    String name = StringArgumentType.getString(ctx, "name");
+                                                    double sum = DoubleArgumentType.getDouble(ctx, "sum");
+                                                    String message = StringArgumentType.getString(ctx, "message");
+
+                                                    MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+                                                    Map<Double, String> rules = config.getRules();
+
+                                                    // Теперь проверяем строгое равенство
+                                                    boolean hasExactRule = rules.keySet().stream()
+                                                            .anyMatch(amount -> Math.abs(amount - sum) < 0.0001);
+
+                                                    if (!hasExactRule) {
+                                                        ctx.getSource().sendSuccess(() ->
+                                                                Component.literal("§c[DIntegrate] No donation rule found for this exact amount."), false);
+                                                        LOGGER.warn("[DIntegrate] No exact donation rule for test amount {}", sum);
+                                                        return 0;
+                                                    }
+
+                                                    ctx.getSource().sendSuccess(() ->
+                                                            Component.literal("§d[DIntegrate] Simulating donation from §b"
+                                                                    + name + " §7(" + sum + "): §f" + message), true);
+
+                                                    server.execute(() ->
+                                                            new ActionHandler(server, config)
+                                                                    .execute(sum, name, message)
+                                                    );
+
+                                                    LOGGER.info("[DIntegrate] Simulated donation executed (exact): {} sent {} ({})", name, sum, message);
+                                                    return 1;
+                                                })
+                                        )
+                                )
                         )
                 )
         );
