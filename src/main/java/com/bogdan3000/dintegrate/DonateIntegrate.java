@@ -49,6 +49,7 @@ public class DonateIntegrate {
         var dispatcher = event.getDispatcher();
 
         dispatcher.register(Commands.literal("dpi")
+
                 // /dpi token <value>
                 .then(Commands.literal("token")
                         .then(Commands.argument("value", StringArgumentType.string())
@@ -101,7 +102,34 @@ public class DonateIntegrate {
                             return 1;
                         })
                 )
-
+                // /dpi info
+                .then(Commands.literal("info")
+                        .executes(ctx -> {
+                            Minecraft mc = Minecraft.getInstance();
+                            if (mc.player != null) {
+                                mc.player.sendSystemMessage(Component.literal("§6[DIntegrate Info] §7———"));
+                                mc.player.sendSystemMessage(Component.literal("§eModes:"));
+                                mc.player.sendSystemMessage(Component.literal(" §aall §7– выполняет все команды по порядку"));
+                                mc.player.sendSystemMessage(Component.literal(" §brandom §7– выбирает одну случайную команду"));
+                                mc.player.sendSystemMessage(Component.literal(" §drandomN §7– выполняет N случайных команд"));
+                                mc.player.sendSystemMessage(Component.literal(" §crandom_all §7– все команды, но в случайном порядке"));
+                                mc.player.sendSystemMessage(Component.literal(""));
+                                mc.player.sendSystemMessage(Component.literal("§eDelays:"));
+                                mc.player.sendSystemMessage(Component.literal(" §adelay X §7– задержка X секунд"));
+                                mc.player.sendSystemMessage(Component.literal(" §brandomdelay X-Y §7– случайная задержка между X и Y сек"));
+                                mc.player.sendSystemMessage(Component.literal(" §drand X-Y §7– короткая форма randomdelay"));
+                                mc.player.sendSystemMessage(Component.literal(" §estartdelay=X §7– задержка перед всей цепочкой"));
+                                mc.player.sendSystemMessage(Component.literal(""));
+                                mc.player.sendSystemMessage(Component.literal("§ePlaceholders:"));
+                                mc.player.sendSystemMessage(Component.literal(" §a%name% §7– имя донатера"));
+                                mc.player.sendSystemMessage(Component.literal(" §a%sum% §7– сумма доната"));
+                                mc.player.sendSystemMessage(Component.literal(" §a%message% §7– сообщение донатера"));
+                                mc.player.sendSystemMessage(Component.literal(""));
+                                mc.player.sendSystemMessage(Component.literal("§7Используй §b/dpi test <name> <sum> <msg> §7для проверки."));
+                            }
+                            return 1;
+                        })
+                )
                 // /dpi test <name> <sum> <message>
                 .then(Commands.literal("test")
                         .then(Commands.argument("name", StringArgumentType.string())
