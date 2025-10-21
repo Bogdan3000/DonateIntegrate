@@ -17,6 +17,8 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import org.slf4j.Logger;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -26,8 +28,10 @@ import java.io.PrintWriter;
 public class DonateIntegrate {
 
     private static final Logger LOGGER = LogUtils.getLogger();
+
     private static Config config;
     private static DonatePayProvider donateProvider;
+    private static Thread configWatcherThread;
 
     public DonateIntegrate() {
         MinecraftForge.EVENT_BUS.register(this);
@@ -42,6 +46,8 @@ public class DonateIntegrate {
         } catch (IOException e) {
             LOGGER.error("[DIntegrate] Failed to load config", e);
         }
+        // стартуем наблюдатель за config/dintegrate.cfg
+        startConfigWatcher();
 
         event.enqueueWork(() -> {
             // ✅ Регистрируем бинды и подписываем KeybindHandler на ивенты
@@ -221,6 +227,37 @@ public class DonateIntegrate {
     private static void restartConnection() {
         stopConnection();
         startConnection();
+    }
+
+    private static void startConfigWatcher() {
+        try {
+            if (configWatcherThread != null && configWatcherThread.isAlive()) {
+                return; // уже запущен
+            }
+            Path cfg = Paths.get("config", "dintegrate.cfg");
+            ConfigWatcher watcher = new ConfigWatcher(cfg);
+            configWatcherThread = new Thread(watcher, "DIntegrate-ConfigWatcher");
+            configWatcherThread.setDaemon(true);
+            configWatcherThread.start();
+            LOGGER.info("[DIntegrate] Config watcher started for {}", cfg.toAbsolutePath());
+        } catch (Exception e) {
+            LOGGER.error("[DIntegrate] Failed to start config watcher", e);
+        }
+    }
+
+    /**
+     * Этот метод вызывается только из потока вотчера, чтобы аккуратно перезагрузить конфиг
+     * и перезапустить подключение. Вынесен отдельно, чтобы не путать с ручными командами.
+     */
+    static void reloadAndRestartFromWatcher() {
+        try {
+            config.load();
+            restartConnection();
+            sendClientMessage("§b[DIntegrate] Конфиг обновлён, соединение перезапущено.");
+        } catch (IOException e) {
+            LOGGER.error("[DIntegrate] Failed to reload config from watcher", e);
+            sendClientMessage("§c[DIntegrate] Ошибка перезагрузки конфига, см. лог.");
+        }
     }
 
     private static void sendClientMessage(String text) {
