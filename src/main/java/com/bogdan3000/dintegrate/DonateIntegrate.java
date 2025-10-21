@@ -34,6 +34,7 @@ public class DonateIntegrate {
         MinecraftForge.EVENT_BUS.register(this);
     }
 
+    // === ИНИЦИАЛИЗАЦИЯ ===
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         LOGGER.info("[DIntegrate] Client initialized");
@@ -45,6 +46,7 @@ public class DonateIntegrate {
         }
     }
 
+    // === РЕГИСТРАЦИЯ КОМАНД ===
     @SubscribeEvent
     public void onRegisterCommands(RegisterClientCommandsEvent event) {
         var d = event.getDispatcher();
@@ -57,7 +59,7 @@ public class DonateIntegrate {
                                 .executes(ctx -> {
                                     String v = StringArgumentType.getString(ctx, "value");
                                     saveToJsonConfig("token", v);
-                                    reloadConfig(true); // с перезапуском
+                                    reloadConfig(true);
                                     sendClientMessage("§aToken updated and reconnected!");
                                     return 1;
                                 })))
@@ -68,12 +70,12 @@ public class DonateIntegrate {
                                 .executes(ctx -> {
                                     int id = IntegerArgumentType.getInteger(ctx, "value");
                                     saveToJsonConfig("user_id", String.valueOf(id));
-                                    reloadConfig(true); // с перезапуском
+                                    reloadConfig(true);
                                     sendClientMessage("§aUser ID updated and reconnected!");
                                     return 1;
                                 })))
 
-                // === RELOAD (без рестарта сокета) ===
+                // === RELOAD ===
                 .then(Commands.literal("reload")
                         .executes(ctx -> {
                             reloadConfig(false);
@@ -81,25 +83,22 @@ public class DonateIntegrate {
                             return 1;
                         }))
 
-                // === START / STOP / RESTART ===
-                .then(Commands.literal("start")
-                        .executes(ctx -> {
-                            startConnection();
-                            sendClientMessage("§aConnection started!");
-                            return 1;
-                        }))
-                .then(Commands.literal("stop")
-                        .executes(ctx -> {
-                            stopConnection();
-                            sendClientMessage("§cConnection stopped.");
-                            return 1;
-                        }))
-                .then(Commands.literal("restart")
-                        .executes(ctx -> {
-                            restartConnection();
-                            sendClientMessage("§bConnection restarted!");
-                            return 1;
-                        }))
+                // === CONNECTION ===
+                .then(Commands.literal("start").executes(ctx -> {
+                    startConnection();
+                    sendClientMessage("§aConnection started!");
+                    return 1;
+                }))
+                .then(Commands.literal("stop").executes(ctx -> {
+                    stopConnection();
+                    sendClientMessage("§cConnection stopped.");
+                    return 1;
+                }))
+                .then(Commands.literal("restart").executes(ctx -> {
+                    restartConnection();
+                    sendClientMessage("§bConnection restarted!");
+                    return 1;
+                }))
 
                 // === TEST ===
                 .then(Commands.literal("test")
@@ -133,6 +132,7 @@ public class DonateIntegrate {
         );
     }
 
+    // === ПЕРЕЗАГРУЗКА КОНФИГА ===
     private static void reloadConfig(boolean restart) {
         try {
             config.load();
@@ -152,14 +152,11 @@ public class DonateIntegrate {
         }
     }
 
-    /**
-     * Обновляет dintegrate.json, а не старый .cfg.
-     */
-    private static void saveToJsonConfig(String key, String value) {
+    // === СОХРАНЕНИЕ JSON ===
+    public static void saveToJsonConfig(String key, String value) {
         try {
             Path path = Paths.get("config", "dintegrate.json");
             if (!Files.exists(path)) {
-                LOGGER.warn("[DIntegrate] JSON config not found, creating new one...");
                 Files.createDirectories(path.getParent());
                 Files.writeString(path, "{}");
             }
@@ -183,7 +180,16 @@ public class DonateIntegrate {
         }
     }
 
-    private static void startConnection() {
+    // === ДОСТУП ДЛЯ GUI ===
+    public static DonatePayProvider getDonateProvider() {
+        return donateProvider;
+    }
+
+    public static Config getConfig() {
+        return config;
+    }
+
+    public static void startConnection() {
         if (donateProvider != null && donateProvider.isConnected()) return;
         donateProvider = new DonatePayProvider(
                 config.getToken(),
@@ -196,19 +202,19 @@ public class DonateIntegrate {
         donateProvider.connect();
     }
 
-    private static void stopConnection() {
+    public static void stopConnection() {
         if (donateProvider != null) {
             donateProvider.disconnect();
             donateProvider = null;
         }
     }
 
-    private static void restartConnection() {
+    public static void restartConnection() {
         stopConnection();
         startConnection();
     }
 
-    private static void sendClientMessage(String text) {
+    public static void sendClientMessage(String text) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null)
             mc.player.sendSystemMessage(Component.literal(text));

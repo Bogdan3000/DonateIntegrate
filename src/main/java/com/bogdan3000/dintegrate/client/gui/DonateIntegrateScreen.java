@@ -1,96 +1,77 @@
 package com.bogdan3000.dintegrate.client.gui;
 
 import com.bogdan3000.dintegrate.Config;
-import com.bogdan3000.dintegrate.donation.DonatePayProvider;
-import net.minecraft.client.Minecraft;
+import com.bogdan3000.dintegrate.DonateIntegrate;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class DonateIntegrateScreen extends Screen {
 
+    private final List<Button> tabButtons = new ArrayList<>();
+    private TabBase currentTab;
     private final Config config;
-    private final DonatePayProvider provider;
-    private final boolean connected;
 
-    private TabBase activeTab;
-    private TabConfig tabConfig;
-    private TabCommands tabCommands;
-    private TabMisc tabMisc;
-    private TabInfo tabInfo;
-
-    public DonateIntegrateScreen(Config config, DonatePayProvider provider, boolean connected) {
-        super(Component.literal("DonateIntegrate Manager"));
-        this.config = config;
-        this.provider = provider;
-        this.connected = connected;
+    public DonateIntegrateScreen() {
+        super(Component.literal("DonateIntegrate"));
+        this.config = DonateIntegrate.getConfig();
     }
 
     @Override
     protected void init() {
-        int centerX = this.width / 2;
-        int topY = 20;
+        tabButtons.clear();
+        int x = width / 2 - 170;
+        int y = 15;
 
-        int buttonWidth = 100;
-        int spacing = 5;
-        int startX = centerX - (buttonWidth * 2 + spacing * 3) / 2;
+        // Кнопки вкладок
+        Button btnInfo = Button.builder(Component.literal("Info"), b -> switchTab(new TabInfo()))
+                .bounds(x, y, 80, 20).build();
+        Button btnConfig = Button.builder(Component.literal("Config"), b -> switchTab(new TabConfig(config)))
+                .bounds(x + 90, y, 80, 20).build();
+        Button btnCommands = Button.builder(Component.literal("Commands"), b -> switchTab(new TabCommands()))
+                .bounds(x + 180, y, 80, 20).build();
+        Button btnMisc = Button.builder(Component.literal("Misc"), b -> switchTab(new TabMisc()))
+                .bounds(x + 270, y, 80, 20).build();
 
-        // Главное меню
-        addRenderableWidget(Button.builder(Component.literal("Config"), b -> switchTab(tabConfig))
-                .bounds(startX, topY, buttonWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Commands"), b -> switchTab(tabCommands))
-                .bounds(startX + buttonWidth + spacing, topY, buttonWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Misc"), b -> switchTab(tabMisc))
-                .bounds(startX + (buttonWidth + spacing) * 2, topY, buttonWidth, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Info"), b -> switchTab(tabInfo))
-                .bounds(startX + (buttonWidth + spacing) * 3, topY, buttonWidth, 20).build());
+        addRenderableWidget(btnInfo);
+        addRenderableWidget(btnConfig);
+        addRenderableWidget(btnCommands);
+        addRenderableWidget(btnMisc);
 
-        // Инициализация вкладок (один раз)
-        tabConfig = new TabConfig(this, config, provider);
-        tabCommands = new TabCommands(this, config);
-        tabMisc = new TabMisc(this);
-        tabInfo = new TabInfo(this);
+        tabButtons.add(btnInfo);
+        tabButtons.add(btnConfig);
+        tabButtons.add(btnCommands);
+        tabButtons.add(btnMisc);
 
-        // Первая вкладка по умолчанию
-        if (activeTab == null) {
-            activeTab = tabConfig;
-            activeTab.init(minecraft, this.width, this.height);
-            activeTab.addWidgets();
-        }
+        // По умолчанию открываем Config
+        switchTab(new TabConfig(config));
     }
 
     private void switchTab(TabBase tab) {
-        if (tab == null || tab == activeTab) return;
-
         clearWidgets();
-        init(); // пересоздаёт верхнее меню
-        activeTab = tab;
-        activeTab.init(minecraft, this.width, this.height);
-        activeTab.addWidgets();
+        // вернуть кнопки табов
+        tabButtons.forEach(this::addRenderableWidget);
+
+        this.currentTab = tab;
+        currentTab.init(minecraft, width, height);
+        currentTab.getWidgets().forEach(this::addRenderableWidget);
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        this.renderBackground(graphics);
-        super.render(graphics, mouseX, mouseY, partialTicks);
-
-        graphics.drawCenteredString(this.font, "DonateIntegrate Manager", this.width / 2, 5, 0xFFFFFF);
-
-        if (activeTab != null)
-            activeTab.render(graphics, mouseX, mouseY, partialTicks);
+    public void render(GuiGraphics gfx, int mouseX, int mouseY, float partialTicks) {
+        renderBackground(gfx);
+        if (currentTab != null) {
+            currentTab.render(gfx, mouseX, mouseY, partialTicks);
+        }
+        super.render(gfx, mouseX, mouseY, partialTicks);
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
-    }
-
-    public Minecraft getMinecraft() {
-        return this.minecraft;
-    }
-
-    public void addChildWidget(Button button) {
-        addRenderableWidget(button);
     }
 }
