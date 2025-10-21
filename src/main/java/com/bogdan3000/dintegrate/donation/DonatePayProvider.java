@@ -57,6 +57,10 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
 
     @Override
     public void connect() {
+        if (socket != null) {
+            LOGGER.warn("[DIntegrate] WebSocket already open, skipping connect()");
+            return;
+        }
         if (accessToken == null || accessToken.isBlank()) {
             LOGGER.error("[DIntegrate] Invalid DonatePay token in config!");
             return;
@@ -283,6 +287,10 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
     @Override
     public void disconnect() {
         stopPing();
+        LOGGER.info("[DIntegrate] Disconnecting WebSocket...");
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException ignored) {}
         if (socket != null) {
             try {
                 socket.sendClose(WebSocket.NORMAL_CLOSURE, "Manual disconnect");
