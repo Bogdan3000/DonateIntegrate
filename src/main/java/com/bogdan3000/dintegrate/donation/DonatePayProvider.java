@@ -46,6 +46,7 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
     private String clientId;
     private String subscriptionToken;
     private int msgCounter = 2; // handshake=1, subscribe=2, дальше пинги
+    private long lastTokenTime = 0;
 
     public DonatePayProvider(String accessToken, int userId, String tokenUrl, String socketUrl, Consumer<DonationEvent> handler) {
         this.accessToken = accessToken;
@@ -57,10 +58,11 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
 
     @Override
     public void connect() {
-        if (socket != null) {
-            LOGGER.warn("[DIntegrate] WebSocket already open, skipping connect()");
+        if (socket != null && !socket.isInputClosed() && !socket.isOutputClosed()) {
+            LOGGER.debug("[DIntegrate] WebSocket already connected, skipping connect()");
             return;
         }
+
         if (accessToken == null || accessToken.isBlank()) {
             LOGGER.error("[DIntegrate] Invalid DonatePay token in config!");
             return;
@@ -126,6 +128,14 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
     }
 
     private CompletableFuture<String> getConnectionToken() {
+        long now = System.currentTimeMillis();
+
+        // кэш токена на 60 секунд
+        if (connectToken != null && (now - lastTokenTime) < 60_000) {
+            LOGGER.debug("[DIntegrate] Using cached connection token");
+            return CompletableFuture.completedFuture(connectToken);
+        }
+
         try {
             String body = "{\"access_token\":\"" + accessToken + "\"}";
             HttpRequest req = HttpRequest.newBuilder()
@@ -145,11 +155,15 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
                             JsonReader reader = new JsonReader(new StringReader(resp.body()));
                             reader.setLenient(true);
                             JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-                            return json.has("token") ? json.get("token").getAsString() : null;
+                            if (json.has("token")) {
+                                connectToken = json.get("token").getAsString();
+                                lastTokenTime = now;
+                                return connectToken;
+                            }
                         } catch (Exception e) {
                             LOGGER.error("[DIntegrate] Token parse error", e);
-                            return null;
                         }
+                        return null;
                     });
         } catch (Exception e) {
             LOGGER.error("[DIntegrate] HTTP error", e);
@@ -214,6 +228,7 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
                     if (subToken != null) {
                         this.subscriptionToken = subToken;
                         sendSubscribe(webSocket);
+                        LOGGER.info("[DIntegrate] ✅ Connected and subscribed successfully — listening for donations...");
                     } else {
                         LOGGER.error("[DIntegrate] Failed to get subscription token.");
                     }
@@ -245,7 +260,7 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
             } catch (Exception e) {
                 LOGGER.error("[DIntegrate] Ping send error", e);
             }
-        }, 25, 25, TimeUnit.SECONDS);
+        }, 40, 40, TimeUnit.SECONDS);
     }
 
     private void stopPing() {
@@ -268,17 +283,22 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
 
     private void scheduleReconnect() {
         if (reconnecting) return;
+        if (socket != null && !socket.isInputClosed() && !socket.isOutputClosed()) {
+            LOGGER.debug("[DIntegrate] Reconnect skipped — socket still open");
+            return;
+        }
+
         reconnecting = true;
-        LOGGER.warn("[DIntegrate] Reconnecting in 15s...");
+        LOGGER.warn("[DIntegrate] Reconnecting in 30s...");
         scheduler.schedule(() -> {
             reconnecting = false;
             connect();
-        }, 15, TimeUnit.SECONDS);
+        }, 30, TimeUnit.SECONDS);
     }
 
     @Override
     public boolean isConnected() {
-        return socket != null;
+        return socket != null && !socket.isInputClosed() && !socket.isOutputClosed();
     }
 
     @Override
