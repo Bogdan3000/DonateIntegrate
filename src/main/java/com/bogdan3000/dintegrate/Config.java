@@ -63,22 +63,52 @@ public class Config {
         Files.createDirectories(CONFIG_PATH.getParent());
 
         Config def = new Config();
-        DonationRule r1 = new DonationRule();
-        r1.amount = 10;
-        r1.mode = "all";
-        r1.commands = List.of(
-                "say Спасибо, {name}, за {sum} рублей!",
-                "delay 1.5",
-                "say Вот тебе подарок!",
-                "/give @p minecraft:iron_ingot 3"
+
+        DonationRule rule = new DonationRule();
+        rule.amount = 10;
+        rule.mode = "all";
+        rule.commands = List.of(
+                "/say {name} пожертвовал {sum}₽!",
+                "/delay 1",
+                "/say Сообщение: {message}",
+                "/randomdelay 1-10",
+                "/give @p minecraft:diamond 1"
         );
-        def.rules = List.of(r1);
 
-        try (FileWriter w = new FileWriter(CONFIG_PATH.toFile())) {
-            GSON.toJson(def, w);
-        }
+        def.rules = List.of(rule);
 
-        LOGGER.info("[DIntegrate] Default JSON config created at {}", CONFIG_PATH.toAbsolutePath());
+        // Комментарии и JSON объединяем в один текст
+        String header = """
+            /*
+             * === DonateIntegrate Configuration ===
+             *
+             *  token, user_id — авторизация DonatePay
+             *  token_url и socket_url — не трогай, если не знаешь зачем
+             *
+             * === Donation Rules ===
+             *  Поле "rules" — список правил. Каждое правило имеет:
+             *    amount — сумма доната
+             *    mode — режим выполнения команд:
+             *        "all"         — выполняет все команды по порядку
+             *        "random"      — выбирает одну случайную команду
+             *        "random_all"  — выполняет все команды, но в случайном порядке
+             *        "randomN"     — выполняет N случайных команд (пример: "random3")
+             *
+             * === Дополнительные команды ===
+             *    delay X           — задержка X секунд (пример: "delay 1")
+             *    randomdelay A-B   — случайная задержка от A до B секунд (пример: "randomdelay 1-3")
+             *
+             * === Плейсхолдеры ===
+             *    {name}      — имя донатера
+             *    {sum}       — сумма доната
+             *    {message}   — сообщение донатера
+             */
+            """;
+
+        String json = GSON.toJson(def);
+
+        Files.writeString(CONFIG_PATH, header + "\n" + json);
+        LOGGER.info("[DIntegrate] Default JSON config with documentation created at {}", CONFIG_PATH.toAbsolutePath());
     }
 
     public Map<Double, DonationRule> getRules() {

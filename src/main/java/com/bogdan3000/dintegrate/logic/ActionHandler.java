@@ -95,18 +95,18 @@ public class ActionHandler {
 
     private boolean handleDelay(String line) {
         try {
-            if (line.startsWith("delay ")) {
-                double sec = Double.parseDouble(line.substring(6).trim());
-                LOGGER.info("[DIntegrate] Waiting {} seconds", sec);
-                Thread.sleep((long) (sec * 1000));
+            if (line.startsWith("/delay ")) {
+                double seconds = Double.parseDouble(line.substring(7).trim());
+                LOGGER.info("[DIntegrate] Waiting {} seconds", seconds);
+                Thread.sleep((long) (seconds * 1000));
                 return true;
             }
-            if (line.startsWith("randomdelay ")) {
-                String[] parts = line.substring(12).trim().split("-");
+            if (line.startsWith("/randomdelay ")) {
+                String[] parts = line.substring(13).trim().split("-");
                 double a = Double.parseDouble(parts[0]);
                 double b = Double.parseDouble(parts[1]);
                 double sec = a + ThreadLocalRandom.current().nextDouble() * (b - a);
-                LOGGER.info("[DIntegrate] Waiting {:.2f} seconds (randomdelay)", sec);
+                LOGGER.info("[DIntegrate] Waiting randomly between {}–{} seconds (actual: {})", a, b, String.format("%.2f", sec));
                 Thread.sleep((long) (sec * 1000));
                 return true;
             }
