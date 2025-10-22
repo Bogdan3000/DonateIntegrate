@@ -16,6 +16,10 @@ import java.time.Duration;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
 
+/**
+ * DonatePay WebSocket клиент с защитой от дубликатов соединений.
+ * Без автопереподключения. Управляется только вручную (Start/Stop).
+ */
 public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -39,14 +43,19 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
             });
 
     private WebSocket socket;
-    private volatile boolean reconnecting = false;
     private ScheduledFuture<?> pingTask;
 
     private String connectToken;
     private String clientId;
     private String subscriptionToken;
-    private int msgCounter = 2; // handshake=1, subscribe=2, дальше пинги
-    private long lastTokenTime = 0;
+    private int msgCounter = 2;
+
+    private volatile boolean connecting = false;
+    private volatile boolean connected = false;
+    private volatile boolean subscribed = false;
+
+    private long lastConnectAttempt = 0L;
+    private static final long COOLDOWN_MS = 8000;
 
     public DonatePayProvider(String accessToken, int userId, String tokenUrl, String socketUrl, Consumer<DonationEvent> handler) {
         this.accessToken = accessToken;
@@ -56,40 +65,54 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
         this.donationHandler = handler;
     }
 
+    // ============================================================
+    // Подключение
+    // ============================================================
+
     @Override
-    public void connect() {
-        if (socket != null && !socket.isInputClosed() && !socket.isOutputClosed()) {
-            LOGGER.debug("[DIntegrate] WebSocket already connected, skipping connect()");
+    public synchronized void connect() {
+        long now = System.currentTimeMillis();
+        if (now - lastConnectAttempt < COOLDOWN_MS) {
+            LOGGER.warn("[DIntegrate] Connection attempt blocked — cooldown active ({} ms left)", COOLDOWN_MS - (now - lastConnectAttempt));
+            return;
+        }
+        lastConnectAttempt = now;
+
+        if (connected || connecting) {
+            LOGGER.warn("[DIntegrate] Connection already active — skipping connect()");
             return;
         }
 
-        if (accessToken == null || accessToken.isBlank()) {
-            LOGGER.error("[DIntegrate] Invalid DonatePay token in config!");
+        if (accessToken == null || accessToken.isBlank() || userId <= 0) {
+            LOGGER.error("[DIntegrate] Invalid token or user_id in config!");
             return;
         }
 
+        connecting = true;
+        subscribed = false;
         LOGGER.info("[DIntegrate] Requesting connection token from {}", tokenUrl);
+
         getConnectionToken().thenAccept(token -> {
             if (token == null || token.isEmpty()) {
-                LOGGER.error("[DIntegrate] Failed to get connection token, retrying...");
-                scheduleReconnect();
+                LOGGER.error("[DIntegrate] Failed to get connection token. (Maybe wrong token?)");
+                connecting = false;
                 return;
             }
+
             this.connectToken = token;
-            LOGGER.info("[DIntegrate] Got connection token.");
+            LOGGER.info("[DIntegrate] Got connection token, connecting to WebSocket...");
 
             httpClient.newWebSocketBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
                     .buildAsync(URI.create(socketUrl), this)
                     .thenAccept(ws -> {
                         this.socket = ws;
-                        LOGGER.info("[DIntegrate] WebSocket connected to {}", socketUrl);
                         startPing(ws);
                         scheduler.schedule(() -> sendHandshake(ws), 500, TimeUnit.MILLISECONDS);
                     })
                     .exceptionally(ex -> {
                         LOGGER.error("[DIntegrate] WebSocket connection failed: {}", ex.getMessage());
-                        scheduleReconnect();
+                        connecting = false;
                         return null;
                     });
         });
@@ -127,15 +150,11 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
         }
     }
 
+    // ============================================================
+    // HTTP-запросы
+    // ============================================================
+
     private CompletableFuture<String> getConnectionToken() {
-        long now = System.currentTimeMillis();
-
-        // кэш токена на 60 секунд
-        if (connectToken != null && (now - lastTokenTime) < 60_000) {
-            LOGGER.debug("[DIntegrate] Using cached connection token");
-            return CompletableFuture.completedFuture(connectToken);
-        }
-
         try {
             String body = "{\"access_token\":\"" + accessToken + "\"}";
             HttpRequest req = HttpRequest.newBuilder()
@@ -148,22 +167,18 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
             return httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString())
                     .thenApply(resp -> {
                         if (resp.statusCode() != 200) {
-                            LOGGER.error("[DIntegrate] HTTP error {} when requesting {}", resp.statusCode(), tokenUrl);
+                            LOGGER.error("[DIntegrate] HTTP error {} from DonatePay token API", resp.statusCode());
                             return null;
                         }
                         try {
                             JsonReader reader = new JsonReader(new StringReader(resp.body()));
                             reader.setLenient(true);
                             JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-                            if (json.has("token")) {
-                                connectToken = json.get("token").getAsString();
-                                lastTokenTime = now;
-                                return connectToken;
-                            }
+                            return json.has("token") ? json.get("token").getAsString() : null;
                         } catch (Exception e) {
                             LOGGER.error("[DIntegrate] Token parse error", e);
+                            return null;
                         }
-                        return null;
                     });
         } catch (Exception e) {
             LOGGER.error("[DIntegrate] HTTP error", e);
@@ -210,37 +225,46 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
         }
     }
 
+    // ============================================================
+    // WebSocket события
+    // ============================================================
+
     @Override
     public void onOpen(WebSocket webSocket) {
+        connected = true;
+        connecting = false;
         LOGGER.info("[DIntegrate] WebSocket opened.");
         webSocket.request(1);
     }
 
     @Override
     public CompletionStage<?> onText(WebSocket webSocket, CharSequence message, boolean last) {
-        String msg = message.toString();
-        LOGGER.info("[DIntegrate] WS <- {}", msg);
         try {
+            String msg = message.toString();
             JsonObject json = JsonParser.parseString(msg).getAsJsonObject();
+
             if (json.has("id") && json.get("id").getAsInt() == 1 && json.has("result")) {
                 clientId = json.getAsJsonObject("result").get("client").getAsString();
                 getSubscriptionToken(clientId).thenAccept(subToken -> {
                     if (subToken != null) {
                         this.subscriptionToken = subToken;
                         sendSubscribe(webSocket);
-                        LOGGER.info("[DIntegrate] ✅ Connected and subscribed successfully — listening for donations...");
                     } else {
                         LOGGER.error("[DIntegrate] Failed to get subscription token.");
                     }
                 });
+            } else if (json.has("id") && json.get("id").getAsInt() == 2 && json.has("result")) {
+                subscribed = true;
+                LOGGER.info("[DIntegrate] Successfully subscribed to $public:{}.", userId);
             } else if (json.has("result") && json.getAsJsonObject("result").has("data")) {
                 JsonObject vars = json.getAsJsonObject("result")
                         .getAsJsonObject("data")
                         .getAsJsonObject("data")
                         .getAsJsonObject("notification")
                         .getAsJsonObject("vars");
-                handleDonationMessage(vars);
+                handleDonation(vars);
             }
+
         } catch (Exception e) {
             LOGGER.error("[DIntegrate] WS parse error", e);
         }
@@ -248,19 +272,42 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
         return CompletableFuture.completedFuture(null);
     }
 
+    @Override
+    public CompletionStage<?> onClose(WebSocket webSocket, int code, String reason) {
+        connected = false;
+        subscribed = false;
+        connecting = false;
+        LOGGER.warn("[DIntegrate] WebSocket closed ({}): {}", code, reason);
+        stopPing();
+        socket = null;
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public void onError(WebSocket webSocket, Throwable error) {
+        LOGGER.error("[DIntegrate] WebSocket error", error);
+        connected = false;
+        subscribed = false;
+        connecting = false;
+        stopPing();
+    }
+
+    // ============================================================
+    // Ping
+    // ============================================================
+
     private void startPing(WebSocket ws) {
         stopPing();
         pingTask = scheduler.scheduleAtFixedRate(() -> {
             try {
                 if (ws != null && !ws.isOutputClosed()) {
                     msgCounter++;
-                    String json = "{\"method\":7,\"id\":" + msgCounter + "}";
-                    ws.sendText(json, true);
+                    ws.sendText("{\"method\":7,\"id\":" + msgCounter + "}", true);
                 }
             } catch (Exception e) {
                 LOGGER.error("[DIntegrate] Ping send error", e);
             }
-        }, 40, 40, TimeUnit.SECONDS);
+        }, 25, 25, TimeUnit.SECONDS);
     }
 
     private void stopPing() {
@@ -270,7 +317,43 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
         }
     }
 
-    private void handleDonationMessage(JsonObject vars) {
+    // ============================================================
+    // API
+    // ============================================================
+
+    @Override
+    public boolean isConnected() {
+        return connected && subscribed && socket != null && !socket.isOutputClosed();
+    }
+
+    @Override
+    public void onDonation(Consumer<DonationEvent> handler) { }
+
+    @Override
+    public synchronized void disconnect() {
+        if (!connected && !connecting) {
+            LOGGER.warn("[DIntegrate] Already disconnected — skipping.");
+            return;
+        }
+
+        LOGGER.info("[DIntegrate] Disconnecting WebSocket...");
+        connected = false;
+        subscribed = false;
+        connecting = false;
+        stopPing();
+
+        if (socket != null) {
+            try {
+                socket.sendClose(WebSocket.NORMAL_CLOSURE, "Manual disconnect");
+            } catch (Exception e) {
+                LOGGER.warn("[DIntegrate] Socket close error: {}", e.getMessage());
+            } finally {
+                socket = null;
+            }
+        }
+    }
+
+    private void handleDonation(JsonObject vars) {
         try {
             String name = vars.has("name") ? vars.get("name").getAsString() : "Unknown";
             double sum = vars.has("sum") ? vars.get("sum").getAsDouble() : 0.0;
@@ -278,44 +361,6 @@ public class DonatePayProvider implements DonationProvider, WebSocket.Listener {
             donationHandler.accept(new DonationEvent(name, sum, msg, -1));
         } catch (Exception e) {
             LOGGER.error("[DIntegrate] Donation parse error", e);
-        }
-    }
-
-    private void scheduleReconnect() {
-        if (reconnecting) return;
-        if (socket != null && !socket.isInputClosed() && !socket.isOutputClosed()) {
-            LOGGER.debug("[DIntegrate] Reconnect skipped — socket still open");
-            return;
-        }
-
-        reconnecting = true;
-        LOGGER.warn("[DIntegrate] Reconnecting in 30s...");
-        scheduler.schedule(() -> {
-            reconnecting = false;
-            connect();
-        }, 30, TimeUnit.SECONDS);
-    }
-
-    @Override
-    public boolean isConnected() {
-        return socket != null && !socket.isInputClosed() && !socket.isOutputClosed();
-    }
-
-    @Override
-    public void onDonation(Consumer<DonationEvent> handler) { }
-
-    @Override
-    public void disconnect() {
-        stopPing();
-        LOGGER.info("[DIntegrate] Disconnecting WebSocket...");
-        try {
-            Thread.sleep(300);
-        } catch (InterruptedException ignored) {}
-        if (socket != null) {
-            try {
-                socket.sendClose(WebSocket.NORMAL_CLOSURE, "Manual disconnect");
-            } catch (Exception ignored) {}
-            socket = null;
         }
     }
 }
