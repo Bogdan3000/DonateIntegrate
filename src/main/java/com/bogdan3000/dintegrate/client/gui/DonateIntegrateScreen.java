@@ -1,77 +1,154 @@
 package com.bogdan3000.dintegrate.client.gui;
 
-import com.bogdan3000.dintegrate.Config;
 import com.bogdan3000.dintegrate.DonateIntegrate;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-
+/**
+ * Главный экран DonateIntegrate с вкладками.
+ * Открывается клавишей (см. KeybindHandler, по умолчанию G).
+ */
 public class DonateIntegrateScreen extends Screen {
 
-    private final List<Button> tabButtons = new ArrayList<>();
     private TabBase currentTab;
-    private final Config config;
+
+    private Button btnConfig;
+    private Button btnCommands;
+    private Button btnInfo;
+    private Button btnMisc;
 
     public DonateIntegrateScreen() {
         super(Component.literal("DonateIntegrate"));
-        this.config = DonateIntegrate.getConfig();
     }
 
     @Override
     protected void init() {
-        tabButtons.clear();
-        int x = width / 2 - 170;
-        int y = 15;
+        super.init();
 
-        // Кнопки вкладок
-        Button btnInfo = Button.builder(Component.literal("Info"), b -> switchTab(new TabInfo()))
-                .bounds(x, y, 80, 20).build();
-        Button btnConfig = Button.builder(Component.literal("Config"), b -> switchTab(new TabConfig(config)))
-                .bounds(x + 90, y, 80, 20).build();
-        Button btnCommands = Button.builder(Component.literal("Commands"), b -> switchTab(new TabCommands()))
-                .bounds(x + 180, y, 80, 20).build();
-        Button btnMisc = Button.builder(Component.literal("Misc"), b -> switchTab(new TabMisc()))
-                .bounds(x + 270, y, 80, 20).build();
+        this.renderables.clear();
+        this.children().clear();
 
-        addRenderableWidget(btnInfo);
+        int y = 8;
+        int x = this.width / 2 - 170;
+
+        // === CONFIG ===
+        btnConfig = Button.builder(Component.literal("Config"), b ->
+                        switchTab(new TabConfig(DonateIntegrate.getConfig())))
+                .bounds(x, y, 80, 20)
+                .build();
         addRenderableWidget(btnConfig);
+
+        // === COMMANDS ===
+        btnCommands = Button.builder(Component.literal("Commands"), b ->
+                        switchTab(new TabCommands(DonateIntegrate.getConfig())))
+                .bounds(x + 90, y, 80, 20)
+                .build();
         addRenderableWidget(btnCommands);
+
+        // === INFO ===
+        btnInfo = Button.builder(Component.literal("Info"), b ->
+                        switchTab(new TabInfo()))
+                .bounds(x + 180, y, 80, 20)
+                .build();
+        addRenderableWidget(btnInfo);
+
+        // === MISC ===
+        btnMisc = Button.builder(Component.literal("Misc"), b ->
+                        switchTab(new TabMisc()))
+                .bounds(x + 270, y, 80, 20)
+                .build();
         addRenderableWidget(btnMisc);
 
-        tabButtons.add(btnInfo);
-        tabButtons.add(btnConfig);
-        tabButtons.add(btnCommands);
-        tabButtons.add(btnMisc);
+        // вкладка по умолчанию
+        if (currentTab == null) {
+            currentTab = new TabConfig(DonateIntegrate.getConfig());
+        }
+        currentTab.init(Minecraft.getInstance(), this.width, this.height);
 
-        // По умолчанию открываем Config
-        switchTab(new TabConfig(config));
+        for (var w : currentTab.widgets) {
+            this.addRenderableWidget(w);
+        }
     }
 
-    private void switchTab(TabBase tab) {
-        clearWidgets();
-        // вернуть кнопки табов
-        tabButtons.forEach(this::addRenderableWidget);
+    /** Переключение вкладки */
+    private void switchTab(TabBase next) {
+        if (currentTab != null) {
+            this.renderables.removeAll(currentTab.widgets);
+            this.children().removeAll(currentTab.widgets);
+        }
 
-        this.currentTab = tab;
-        currentTab.init(minecraft, width, height);
-        currentTab.getWidgets().forEach(this::addRenderableWidget);
+        currentTab = next;
+        currentTab.init(Minecraft.getInstance(), this.width, this.height);
+
+        for (var w : currentTab.widgets) {
+            this.addRenderableWidget(w);
+        }
+    }
+
+    /** Управление видимостью кнопок вкладок */
+    public void setTabButtonsVisible(boolean visible) {
+        if (btnConfig != null) btnConfig.visible = visible;
+        if (btnCommands != null) btnCommands.visible = visible;
+        if (btnInfo != null) btnInfo.visible = visible;
+        if (btnMisc != null) btnMisc.visible = visible;
+    }
+
+    /** Полная пересборка GUI при смене режима вкладки */
+    public void rebuildForCurrentTab() {
+        boolean tabsVisible = btnConfig != null && btnConfig.visible;
+
+        this.renderables.clear();
+        this.children().clear();
+
+        if (btnConfig != null) { this.addRenderableWidget(btnConfig); btnConfig.visible = tabsVisible; }
+        if (btnCommands != null) { this.addRenderableWidget(btnCommands); btnCommands.visible = tabsVisible; }
+        if (btnInfo != null) { this.addRenderableWidget(btnInfo); btnInfo.visible = tabsVisible; }
+        if (btnMisc != null) { this.addRenderableWidget(btnMisc); btnMisc.visible = tabsVisible; }
+
+        if (currentTab != null) {
+            for (var w : currentTab.widgets) {
+                this.addRenderableWidget(w);
+            }
+        }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (currentTab != null) currentTab.tick();
     }
 
     @Override
     public void render(GuiGraphics gfx, int mouseX, int mouseY, float partialTicks) {
-        renderBackground(gfx);
+        gfx.fill(0, 0, this.width, this.height, 0xAA000000);
+
         if (currentTab != null) {
             currentTab.render(gfx, mouseX, mouseY, partialTicks);
         }
+
         super.render(gfx, mouseX, mouseY, partialTicks);
+    }
+
+    // === добавляем поддержку скролла ===
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (currentTab != null && currentTab.mouseScrolled(mouseX, mouseY, delta)) {
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    @Override
+    public void onClose() {
+        super.onClose();
+        if (currentTab != null) currentTab.onClose();
     }
 }
